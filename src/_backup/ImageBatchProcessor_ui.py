@@ -5,8 +5,8 @@ from PyQt6.QtWidgets import (
     QLineEdit, QFileDialog, QTreeWidget, QTreeWidgetItem, QLabel, QCheckBox,
     QMessageBox, QAbstractItemView, QHeaderView, QDialog, QScrollArea
 )
-from PyQt6.QtGui import QPixmap, QImage
-from PyQt6.QtCore import Qt
+from PyQt6.QtGui import QPixmap, QImage, QIcon
+from PyQt6.QtCore import Qt,QSize
 from PIL import Image
 from ImageBatchProcessor_utils import process_image_v5
 
@@ -41,6 +41,7 @@ class ImageBatchProcessorUI(QMainWindow):
         self.tree = QTreeWidget()
         self.tree.setColumnCount(2)
         self.tree.setHeaderLabels(["缩略图", "文件路径"])
+        self.tree.setIconSize(QSize(60, 60)) 
         self.tree.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
         self.tree.header().setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
         self.tree.header().setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
@@ -107,13 +108,21 @@ class ImageBatchProcessorUI(QMainWindow):
 
     def set_thumbnail(self, item, path):
         try:
-            img = Image.open(path)
-            img.thumbnail((60, 60))
-            img_qt = QImage(img.tobytes(), img.width, img.height, QImage.Format.Format_RGB888)
+            img = Image.open(path).convert("RGB")
+            img.thumbnail((120, 120))
+            img_qt = QImage(
+                img.tobytes(),
+                img.width,
+                img.height,
+                img.width * 3,
+                QImage.Format.Format_RGB888
+        )
             pixmap = QPixmap.fromImage(img_qt)
-            item.setIcon(0, pixmap)
-        except:
-            pass
+            icon = QIcon(pixmap)
+            item.setIcon(0, icon)
+        except Exception as e:
+            print(f"缩略图加载失败: {e}")
+
 
     def select_output_folder(self):
         folder = QFileDialog.getExistingDirectory(self, "选择输出文件夹")
