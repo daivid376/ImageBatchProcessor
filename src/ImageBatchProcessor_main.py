@@ -1,13 +1,9 @@
-import tkinter as tk
-from ImageBatchProcessor_ui import create_ui
+import sys
+from PyQt6.QtWidgets import QApplication
+from ImageBatchProcessor_ui import ImageBatchProcessorUI
 
 if __name__ == "__main__":
-    # 如果已有窗口实例，先销毁
-    if tk._default_root is not None:
-        try:
-            tk._default_root.destroy()
-        except:
-            pass
-
-    # 创建新窗口
-    create_ui()
+    app = QApplication(sys.argv)
+    win = ImageBatchProcessorUI()
+    win.show()
+    sys.exit(app.exec())
