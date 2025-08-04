@@ -1,23 +1,45 @@
 @echo off
-REM ==============================================
-REM   Build Script for Image Batch Processor V5
-REM   使用 PyInstaller 打包为单独可执行文件 (.exe)
-REM ==============================================
+chcp 65001 >nul
+REM ==========================================
+REM  Build script for ImageBatchProcessor
+REM  Author: EleFlyStudio
+REM ==========================================
 
-REM 切换到当前脚本所在目录
-cd /d %~dp0
+:: 配置变量
+set ENTRY_FILE=src\ImageBatchProcessor_main.py
+set EXE_NAME=ImageBatchProcessor
 
-REM 清理上一次打包生成的文件
-if exist build rmdir /s /q build
+echo [1/4] 检查 Python 环境...
+where python >nul 2>nul
+if %errorlevel% neq 0 (
+    echo Python 未安装或未加入环境变量。
+    pause
+    exit /b 1
+)
+
+echo [2/4] 检查 PyInstaller...
+python -c "import PyInstaller" >nul 2>nul
+if %errorlevel% neq 0 (
+    echo 未检测到 PyInstaller，正在安装...
+    pip install pyinstaller
+)
+
+echo [3/4] 清理旧构建文件...
 if exist dist rmdir /s /q dist
-del /q *.spec
+if exist build rmdir /s /q build
+if exist %EXE_NAME%.spec del /q %EXE_NAME%.spec
 
-REM 使用 PyInstaller 打包 (模块名必须大写)
-python -m PyInstaller --noconfirm --onefile --windowed "anti_pHash.py"
+echo [4/4] 开始打包 (单文件模式)...
+python -m PyInstaller ^
+ --noconfirm ^
+ --onefile ^
+ --windowed ^
+ --name "%EXE_NAME%" ^
+ src\\ImageBatchProcessor_main.py
 
-REM 提示完成
 echo.
-echo ==============================================
-echo 打包完成，文件已生成在 dist 文件夹中
-echo ==============================================
+echo ==========================================
+echo  构建完成！
+echo  可执行文件路径: dist\%EXE_NAME%.exe
+echo ==========================================
 pause

@@ -1,0 +1,8 @@
+{
+    "code-runner.executorMap": {
+        "python": "cmd /c run.bat"
+    },
+    "code-runner.runInTerminal": true,
+    "code-runner.fileDirectoryAsCwd": false,
+    "code-runner.cwd": "${workspaceFolder}"
+}

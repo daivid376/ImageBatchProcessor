@@ -1,6 +1,5 @@
 import os
-from ImageBatchProcessor_utils import process_image_v5
-
+from src.ImageBatchProcessor_utils import process_image_v5
 class ImageBatchModel:
     def __init__(self):
         self.files = []

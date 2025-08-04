@@ -1,10 +1,37 @@
-import cv2
+import cv2,io,os
 import numpy as np
 from PIL import Image
 import random
+from rembg import remove
+from PIL import Image
 
+def replace_background(image_path, background_folder):
+    """
+    自动抠图 + 自动选择背景 + 合成，返回 RGBA 图像
+    """
+    # 抠图处理
+    with open(image_path, 'rb') as f:
+        result = remove(f.read())
+        fg = Image.open(io.BytesIO(result)).convert("RGBA")
+        
+        # 背景图随机选择
+        if background_folder and os.path.isdir(background_folder):
+            bg_files = [f for f in os.listdir(background_folder) if f.lower().endswith(('.jpg','.png','.jpeg'))]
+            if bg_files:
+                bg_path = os.path.join(background_folder, random.choice(bg_files))
+                bg = Image.open(bg_path).convert("RGBA").resize(fg.size)
+            else:
+                bg = Image.new("RGBA", fg.size, (200, 200, 200, 255))
+        else:
+            bg = Image.new("RGBA", fg.size, (200, 200, 200, 255))
+        
+        # 合成图像
+        combined = Image.alpha_composite(bg, fg)
+        return combined.convert("RGB")
+    
 def process_image_v5(image_path, flip=True, noise_level=2.0, min_angle=0.5, max_angle=1.5):
-    img = Image.open(image_path).convert("RGB")
+    img = replace_background(image_path, 'D:\Temu资料\其他\background_images')
+    #img = Image.open(image_path).convert("RGB")
     img_np = np.array(img)
 
     # Step 1: 水平翻转
