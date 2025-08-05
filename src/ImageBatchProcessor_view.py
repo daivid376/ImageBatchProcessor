@@ -6,6 +6,8 @@ from PyQt6.QtWidgets import QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QPus
 from PyQt6.QtCore import pyqtSignal, Qt, QSize, QSettings
 from PyQt6.QtGui import QPixmap, QImage, QIcon
 from PIL import Image
+from src.config import ImageProcessConfig
+from dataclasses import dataclass, fields
 
 class DropLineEdit(QLineEdit):
     def __init__(self, callback=None, parent=None):
@@ -35,7 +37,7 @@ class DropLineEdit(QLineEdit):
 class ImageBatchView(QMainWindow):
     files_dropped = pyqtSignal(list)
     output_folder_selected = pyqtSignal(str)
-    process_requested = pyqtSignal(bool, float, float, float)
+    process_requested = pyqtSignal(ImageProcessConfig)
     file_removed = pyqtSignal(str)
 
     def __init__(self):
@@ -73,6 +75,12 @@ class ImageBatchView(QMainWindow):
         self.flip_check.setChecked(True)
         self.flip_check.setObjectName("flip")
         self.flip_check.setProperty("persist", True)
+        
+        self.vflip_check = QCheckBox("垂直翻转")      # 🟩 新增
+        self.vflip_check.setChecked(False)
+        self.vflip_check.setObjectName("vflip")
+        self.vflip_check.setProperty("persist", True)
+        
         self.noise_entry = QLineEdit("2.0")
         self.noise_entry.setObjectName("noise")
         self.noise_entry.setProperty("persist", True)
@@ -82,6 +90,21 @@ class ImageBatchView(QMainWindow):
         self.rot_max_entry = QLineEdit("1.5")
         self.rot_max_entry.setObjectName("rot_max")
         self.rot_max_entry.setProperty("persist", True)
+        
+
+
+        self.persp_min_entry = QLineEdit("1.0")       # 🟩 新增
+        self.persp_min_entry.setObjectName("persp_min")
+        self.persp_min_entry.setProperty("persist", True)
+
+        self.persp_max_entry = QLineEdit("5.0")       # 🟩 新增
+        self.persp_max_entry.setObjectName("persp_max")
+        self.persp_max_entry.setProperty("persist", True)
+
+        self.color_jitter_entry = QLineEdit("0.02")   # 🟩 新增
+        self.color_jitter_entry.setObjectName("color_jitter")
+        self.color_jitter_entry.setProperty("persist", True)
+        
         options_layout.addWidget(self.flip_check)
         options_layout.addWidget(QLabel("噪点强度"))
         options_layout.addWidget(self.noise_entry)
@@ -89,6 +112,13 @@ class ImageBatchView(QMainWindow):
         options_layout.addWidget(self.rot_min_entry)
         options_layout.addWidget(QLabel("旋转最大"))
         options_layout.addWidget(self.rot_max_entry)
+        options_layout.addWidget(self.vflip_check)
+        options_layout.addWidget(QLabel("透视最小"))
+        options_layout.addWidget(self.persp_min_entry)
+        options_layout.addWidget(QLabel("透视最大"))
+        options_layout.addWidget(self.persp_max_entry)
+        options_layout.addWidget(QLabel("颜色扰动"))
+        options_layout.addWidget(self.color_jitter_entry)
         layout.addLayout(options_layout)
 
         self.thumb_size_entry = QSpinBox()
@@ -128,15 +158,34 @@ class ImageBatchView(QMainWindow):
         if folder:
             self.output_entry.setText(folder)
             self.output_folder_selected.emit(folder)
-
+    def collect_parameters(self):
+        kwargs = {}
+        for f in fields(ImageProcessConfig):
+            name = f.name
+            widget = self.findChild(QWidget, name)
+            if widget is None:
+                continue
+            # 根据控件类型自动取值
+            if isinstance(widget, QCheckBox):
+                kwargs[name] = widget.isChecked()
+            elif isinstance(widget, QSpinBox):
+                kwargs[name] = widget.value()
+            else:  # QLineEdit
+                text = widget.text()
+                # 自动类型转换
+                if f.type == bool:
+                    kwargs[name] = text.lower() in ("true", "1", "yes", "y")
+                elif f.type == int:
+                    kwargs[name] = int(text)
+                elif f.type == float:
+                    kwargs[name] = float(text)
+                else:
+                    kwargs[name] = text
+        return ImageProcessConfig(**kwargs)
     def emit_process(self):
         try:
-            self.process_requested.emit(
-                self.flip_check.isChecked(),
-                float(self.noise_entry.text()),
-                float(self.rot_min_entry.text()),
-                float(self.rot_max_entry.text())
-            )
+            config = self.collect_parameters()
+            self.process_requested.emit(config)
         except:
             QMessageBox.critical(self, "错误", "参数输入不正确")
 

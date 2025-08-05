@@ -1,5 +1,6 @@
 import os
 from src.ImageBatchProcessor_utils import process_image_v5
+from src.config import ImageProcessConfig
 class ImageBatchModel:
     def __init__(self):
         self.files = []
@@ -25,10 +26,10 @@ class ImageBatchModel:
                 added_files.append(f)
         return added_files
 
-    def process_all(self, flip, noise, rot_min, rot_max):
+    def process_all(self, config:ImageProcessConfig):
         if not self.output_dir or not os.path.isdir(self.output_dir):
             os.makedirs(self.output_dir, exist_ok=True)
         for file in self.files:
-            img_out = process_image_v5(file, flip, noise, rot_min, rot_max)
+            img_out = process_image_v5(file,config)
             img_out.save(os.path.join(self.output_dir, "mod_" + os.path.basename(file)), quality=95)
 

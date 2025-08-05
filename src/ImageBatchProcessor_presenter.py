@@ -18,12 +18,12 @@ class ImageBatchPresenter:
     def handle_remove_file(self, filepath):
         if filepath in self.model.files:
             self.model.files.remove(filepath)
-    def handle_process(self, flip, noise, rot_min, rot_max):
+    def handle_process(self, config):
         if not self.model.files:
             QMessageBox.critical(self.view, "错误", "未选择文件")
             return
         if not self.model.output_dir:
             QMessageBox.critical(self.view, "错误", "未选择输出目录")
             return
-        self.model.process_all(flip, noise, rot_min, rot_max)
+        self.model.process_all(config)
         QMessageBox.information(self.view, "完成", "图片处理完成！")
