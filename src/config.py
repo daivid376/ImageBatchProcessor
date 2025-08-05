@@ -1,13 +1,52 @@
-# src/config.py
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 @dataclass
 class ImageProcessConfig:
-    flip: bool = True
-    vflip: bool = False
-    noise_level: float = 2.0
-    rot_min: float = 0.5
-    rot_max: float = 1.5
-    persp_min: float = 1.0
-    persp_max: float = 5.0
-    color_jitter: float = 0.02
+    hflip: bool = field(default=False, metadata={
+        "label": "水平翻转",
+        "tooltip": "是否将图片进行水平翻转"
+    })
+    vflip: bool = field(default=False, metadata={
+        "label": "垂直翻转",
+        "tooltip": "是否将图片进行垂直翻转"
+    })
+    noise_level: float = field(default=2.0, metadata={
+        "label": "噪声强度",
+        "tooltip": "添加微弱随机噪声，避免被平台识别"
+    })
+    rot_min: float = field(default=0.5, metadata={
+        "label": "最小旋转角度",
+        "tooltip": "随机旋转的最小角度（度）"
+    })
+    rot_max: float = field(default=1.5, metadata={
+        "label": "最大旋转角度",
+        "tooltip": "随机旋转的最大角度（度）"
+    })
+    persp_min: float = field(default=1.0, metadata={
+        "label": "透视最小拉伸",
+        "tooltip": "透视变换时的最小拉伸百分比"
+    })
+    persp_max: float = field(default=5.0, metadata={
+        "label": "透视最大拉伸",
+        "tooltip": "透视变换时的最大拉伸百分比"
+    })
+    color_jitter: float = field(default=0.02, metadata={
+        "label": "颜色微调",
+        "tooltip": "轻微调整颜色，增加随机性"
+    })
+    distortion_strength: float = field(default=5.0, metadata={
+        "label": "扭曲强度",
+        "tooltip": "扭曲的幅度大小"
+    })
+    distortion_smoothness: float = field(default=8.0, metadata={
+        "label": "扭曲平滑度",
+        "tooltip": "扭曲平滑程度，值越大越平滑"
+    })
+    scale_x: float = field(default=1.0, metadata={
+        "label": "水平缩放",
+        "tooltip": "水平方向缩放倍数"
+    })
+    scale_y: float = field(default=1.0, metadata={
+        "label": "垂直缩放",
+        "tooltip": "垂直方向缩放倍数"
+    })

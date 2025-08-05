@@ -1,45 +1,29 @@
 @echo off
+setlocal
 chcp 65001 >nul
-REM ==========================================
-REM  Build script for ImageBatchProcessor
-REM  Author: EleFlyStudio
-REM ==========================================
 
-:: 配置变量
-set ENTRY_FILE=src\ImageBatchProcessor_main.py
-set EXE_NAME=ImageBatchProcessor
+set EXE_NAME=ImageBatchProcessor.exe
+set MAIN_SCRIPT=src\ImageBatchProcessor_main.py
+set ICON_FILE=src\resources\app_icon.ico
+set OUTPUT_DIR=release
 
-echo [1/4] 检查 Python 环境...
-where python >nul 2>nul
-if %errorlevel% neq 0 (
-    echo Python 未安装或未加入环境变量。
-    pause
-    exit /b 1
-)
+REM 删除旧的输出目录，但保留缓存加速打包
+rmdir /s /q dist %OUTPUT_DIR% >nul 2>nul
 
-echo [2/4] 检查 PyInstaller...
-python -c "import PyInstaller" >nul 2>nul
-if %errorlevel% neq 0 (
-    echo 未检测到 PyInstaller，正在安装...
-    pip install pyinstaller
-)
-
-echo [3/4] 清理旧构建文件...
-if exist dist rmdir /s /q dist
-if exist build rmdir /s /q build
-if exist %EXE_NAME%.spec del /q %EXE_NAME%.spec
-
-echo [4/4] 开始打包 (单文件模式)...
-python -m PyInstaller ^
+echo === [Step 1] 使用 PyInstaller 打包 ===
+pyinstaller ^
  --noconfirm ^
  --onefile ^
  --windowed ^
  --name "%EXE_NAME%" ^
- src\\ImageBatchProcessor_main.py
+ --icon "%ICON_FILE%" ^
+ --add-data "src\style.qss;src" ^
+ --add-data "src\resources\app_icon.ico;resources" ^
+ "%MAIN_SCRIPT%"
 
-echo.
-echo ==========================================
-echo  构建完成！
-echo  可执行文件路径: dist\%EXE_NAME%.exe
-echo ==========================================
+echo === [Step 2] 将 exe 移动到 %OUTPUT_DIR% 目录 ===
+mkdir "%OUTPUT_DIR%"
+move /y "dist\%EXE_NAME%" "%OUTPUT_DIR%\" >nul
+
+echo ✅ 打包完成: %OUTPUT_DIR%\%EXE_NAME%
 pause

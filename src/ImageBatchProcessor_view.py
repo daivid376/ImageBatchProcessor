@@ -1,13 +1,37 @@
-# ImageBatchProcessor_view.py (改进版：自动保存/加载 UI 设置)
-import os
-from PyQt6.QtWidgets import QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QPushButton, \
-    QLineEdit, QFileDialog, QTreeWidget, QTreeWidgetItem, QLabel, QCheckBox, \
-    QMessageBox, QAbstractItemView, QHeaderView, QProgressBar, QSpinBox
+import os,sys
+from PyQt6.QtWidgets import (
+    QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QPushButton,
+    QLineEdit, QFileDialog, QTreeWidget, QTreeWidgetItem, QLabel, QCheckBox,
+    QMessageBox, QAbstractItemView, QHeaderView, QProgressBar, QMenuBar, QMenu,QDialog,QApplication
+)
 from PyQt6.QtCore import pyqtSignal, Qt, QSize, QSettings
 from PyQt6.QtGui import QPixmap, QImage, QIcon
 from PIL import Image
 from src.config import ImageProcessConfig
-from dataclasses import dataclass, fields
+from dataclasses import fields
+from PyQt6.QtWidgets import QDialog, QVBoxLayout, QLabel, QProgressBar
+from PyQt6.QtCore import pyqtSlot
+
+class ProgressDialog(QDialog):
+    def __init__(self, total=100, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("处理进度")
+        self.setModal(True)
+        self.resize(300, 100)
+
+        layout = QVBoxLayout(self)
+        self.label = QLabel("正在处理，请稍候...")
+        self.progress_bar = QProgressBar()
+        self.progress_bar.setRange(0, total)
+        self.progress_bar.setValue(0)
+
+        layout.addWidget(self.label)
+        layout.addWidget(self.progress_bar)
+
+    @pyqtSlot(int)
+    def set_progress(self, value):
+        self.progress_bar.setValue(value)
+
 
 class DropLineEdit(QLineEdit):
     def __init__(self, callback=None, parent=None):
@@ -42,15 +66,37 @@ class ImageBatchView(QMainWindow):
 
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("批量图片处理工具 MVP")
+        self.setWindowTitle("批量图片处理工具 MVP (动态UI版)")
         self.setGeometry(100, 100, 900, 700)
         self.setAcceptDrops(True)
         self.settings = QSettings("EleFlyStudio", "ImageBatchProcessor")
+
+        # 设置窗口图标
+        base_dir = getattr(sys, '_MEIPASS', os.path.abspath(os.path.dirname(__file__)))
+        icon_path = os.path.join(base_dir, "resources", "app_icon.ico")
+        if os.path.exists(icon_path):
+            self.setWindowIcon(QIcon(icon_path))
+        # 创建菜单栏
+        menu_bar = QMenuBar(self)
+        self.setMenuBar(menu_bar)
+        view_menu = QMenu("视图", self)
+        self.thumb_size_menu = view_menu.addMenu("缩略图大小")
+        self.thumb_size_menu.addAction("小", lambda: self.change_thumb_size(20))
+        self.thumb_size_menu.addAction("中", lambda: self.change_thumb_size(40))
+        self.thumb_size_menu.addAction("大", lambda: self.change_thumb_size(80))
+        menu_bar.addMenu(view_menu)
+        
+        # 在菜单栏添加“参数”菜单
+        param_menu = QMenu("参数", self)
+        reset_action = param_menu.addAction("重置为默认值")
+        reset_action.triggered.connect(self.reset_parameters)
+        menu_bar.addMenu(param_menu)
 
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
         layout = QVBoxLayout(central_widget)
 
+        # 文件列表
         self.tree = QTreeWidget()
         self.tree.setColumnCount(2)
         self.tree.setHeaderLabels(["缩略图", "文件路径"])
@@ -60,6 +106,7 @@ class ImageBatchView(QMainWindow):
         self.tree.header().setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
         layout.addWidget(self.tree)
 
+        # 输出目录选择
         out_layout = QHBoxLayout()
         self.output_entry = DropLineEdit(self.output_folder_selected.emit, self)
         self.output_entry.setObjectName("output_dir")
@@ -70,69 +117,38 @@ class ImageBatchView(QMainWindow):
         out_layout.addWidget(out_btn)
         layout.addLayout(out_layout)
 
-        options_layout = QHBoxLayout()
-        self.flip_check = QCheckBox("水平翻转")
-        self.flip_check.setChecked(True)
-        self.flip_check.setObjectName("flip")
-        self.flip_check.setProperty("persist", True)
-        
-        self.vflip_check = QCheckBox("垂直翻转")      # 🟩 新增
-        self.vflip_check.setChecked(False)
-        self.vflip_check.setObjectName("vflip")
-        self.vflip_check.setProperty("persist", True)
-        
-        self.noise_entry = QLineEdit("2.0")
-        self.noise_entry.setObjectName("noise")
-        self.noise_entry.setProperty("persist", True)
-        self.rot_min_entry = QLineEdit("0.5")
-        self.rot_min_entry.setObjectName("rot_min")
-        self.rot_min_entry.setProperty("persist", True)
-        self.rot_max_entry = QLineEdit("1.5")
-        self.rot_max_entry.setObjectName("rot_max")
-        self.rot_max_entry.setProperty("persist", True)
-        
+        # ==== 动态参数控件区 ====
+        self.param_widgets = {}
+        params_layout = QVBoxLayout()
+        params_layout.setSpacing(5)
 
+        for f in fields(ImageProcessConfig):
+            row = QHBoxLayout()
+            label_text = f.metadata.get("label", f.name)
+            tooltip_text = f.metadata.get("tooltip", "")
 
-        self.persp_min_entry = QLineEdit("1.0")       # 🟩 新增
-        self.persp_min_entry.setObjectName("persp_min")
-        self.persp_min_entry.setProperty("persist", True)
+            label = QLabel(label_text)
+            label.setFixedWidth(100)
+            label.setToolTip(tooltip_text)
 
-        self.persp_max_entry = QLineEdit("5.0")       # 🟩 新增
-        self.persp_max_entry.setObjectName("persp_max")
-        self.persp_max_entry.setProperty("persist", True)
+            if f.type == bool:
+                widget = QCheckBox()
+                widget.setChecked(getattr(ImageProcessConfig(), f.name))
+            else:
+                widget = QLineEdit(str(getattr(ImageProcessConfig(), f.name)))
+                widget.setFixedWidth(80)
 
-        self.color_jitter_entry = QLineEdit("0.02")   # 🟩 新增
-        self.color_jitter_entry.setObjectName("color_jitter")
-        self.color_jitter_entry.setProperty("persist", True)
-        
-        options_layout.addWidget(self.flip_check)
-        options_layout.addWidget(QLabel("噪点强度"))
-        options_layout.addWidget(self.noise_entry)
-        options_layout.addWidget(QLabel("旋转最小"))
-        options_layout.addWidget(self.rot_min_entry)
-        options_layout.addWidget(QLabel("旋转最大"))
-        options_layout.addWidget(self.rot_max_entry)
-        options_layout.addWidget(self.vflip_check)
-        options_layout.addWidget(QLabel("透视最小"))
-        options_layout.addWidget(self.persp_min_entry)
-        options_layout.addWidget(QLabel("透视最大"))
-        options_layout.addWidget(self.persp_max_entry)
-        options_layout.addWidget(QLabel("颜色扰动"))
-        options_layout.addWidget(self.color_jitter_entry)
-        layout.addLayout(options_layout)
+            widget.setObjectName(f.name)
+            widget.setProperty("persist", True)
+            widget.setToolTip(tooltip_text)
 
-        self.thumb_size_entry = QSpinBox()
-        self.thumb_size_entry.setRange(20, 300)
-        self.thumb_size_entry.setValue(40)
-        self.thumb_size_entry.setObjectName("thumb_size")
-        self.thumb_size_entry.setProperty("persist", True)
-        options_layout.addWidget(QLabel("缩略图大小"))
-        options_layout.addWidget(self.thumb_size_entry)
-        self.thumb_size_entry.valueChanged.connect(self.update_thumbnail_size)
+            self.param_widgets[f.name] = widget
+            row.addWidget(label)
+            row.addWidget(widget)
+            row.addStretch()
+            params_layout.addLayout(row)
 
-        self.progress_bar = QProgressBar()
-        self.progress_bar.setValue(0)
-        layout.addWidget(self.progress_bar)
+        layout.addLayout(params_layout)
 
         process_btn = QPushButton("开始处理")
         process_btn.clicked.connect(self.emit_process)
@@ -158,36 +174,44 @@ class ImageBatchView(QMainWindow):
         if folder:
             self.output_entry.setText(folder)
             self.output_folder_selected.emit(folder)
+
+    def change_thumb_size(self, size):
+        self.tree.setIconSize(QSize(size, size))
+        for i in range(self.tree.topLevelItemCount()):
+            item = self.tree.topLevelItem(i)
+            path = item.text(1)
+            self.set_item_icon(item, path, size)
+
     def collect_parameters(self):
         kwargs = {}
         for f in fields(ImageProcessConfig):
-            name = f.name
-            widget = self.findChild(QWidget, name)
-            if widget is None:
+            widget = self.param_widgets.get(f.name)
+            if not widget:
                 continue
-            # 根据控件类型自动取值
             if isinstance(widget, QCheckBox):
-                kwargs[name] = widget.isChecked()
-            elif isinstance(widget, QSpinBox):
-                kwargs[name] = widget.value()
-            else:  # QLineEdit
+                kwargs[f.name] = widget.isChecked()
+            else:
                 text = widget.text()
-                # 自动类型转换
                 if f.type == bool:
-                    kwargs[name] = text.lower() in ("true", "1", "yes", "y")
+                    kwargs[f.name] = text.lower() in ("true", "1", "yes", "y")
                 elif f.type == int:
-                    kwargs[name] = int(text)
+                    kwargs[f.name] = int(text)
                 elif f.type == float:
-                    kwargs[name] = float(text)
+                    kwargs[f.name] = float(text)
                 else:
-                    kwargs[name] = text
+                    kwargs[f.name] = text
         return ImageProcessConfig(**kwargs)
+
     def emit_process(self):
         try:
             config = self.collect_parameters()
+            # 创建进度对话框
+            total_files = len(self.tree.findItems("", Qt.MatchFlag.MatchContains))
+
+            # 发出处理请求
             self.process_requested.emit(config)
-        except:
-            QMessageBox.critical(self, "错误", "参数输入不正确")
+        except Exception as e:
+            QMessageBox.critical(self, "错误", f"参数输入不正确: {e}")
 
     def set_item_icon(self, item, path, size):
         img = Image.open(path).convert("RGB")
@@ -195,17 +219,19 @@ class ImageBatchView(QMainWindow):
         img_qt = QImage(img.tobytes(), img.width, img.height, img.width * 3, QImage.Format.Format_RGB888)
         icon = QIcon(QPixmap.fromImage(img_qt))
         item.setIcon(0, icon)
-
-    def update_thumbnail_size(self):
-        size = self.thumb_size_entry.value()
-        self.tree.setIconSize(QSize(size, size))
-        for i in range(self.tree.topLevelItemCount()):
-            item = self.tree.topLevelItem(i)
-            path = item.text(1)
-            self.set_item_icon(item, path, size)
-
+    def reset_parameters(self):
+        default_config = ImageProcessConfig()  # 获取默认参数
+        for f in fields(ImageProcessConfig):
+            widget = self.param_widgets.get(f.name)
+            if widget:
+                default_value = getattr(default_config, f.name)
+                if isinstance(widget, QCheckBox):
+                    widget.setChecked(default_value)
+                else:
+                    widget.setText(str(default_value))
+                    
     def add_file_item(self, path):
-        size = self.thumb_size_entry.value()
+        size = self.tree.iconSize().width()
         item = QTreeWidgetItem(["", path])
         img = Image.open(path).convert("RGB")
         img.thumbnail((size, size))
@@ -232,8 +258,6 @@ class ImageBatchView(QMainWindow):
                 key = widget.objectName()
                 if isinstance(widget, QCheckBox):
                     self.settings.setValue(key, widget.isChecked())
-                elif isinstance(widget, QSpinBox):
-                    self.settings.setValue(key, widget.value())
                 else:
                     self.settings.setValue(key, widget.text())
 
@@ -245,17 +269,20 @@ class ImageBatchView(QMainWindow):
                 if val is not None:
                     if isinstance(widget, QCheckBox):
                         widget.setChecked(str(val).lower() == 'true')
-                    elif isinstance(widget, QSpinBox):
-                        widget.setValue(int(val))
                     else:
                         widget.setText(val)
         saved_dir = self.output_entry.text().strip()
         if saved_dir:
             self.output_folder_selected.emit(saved_dir)
+
     def closeEvent(self, event):
         self.save_settings()
         super().closeEvent(event)
+
     def emit_initial_signals(self):
         saved_dir = self.output_entry.text().strip()
         if saved_dir:
             self.output_folder_selected.emit(saved_dir)
+    def show_progress_dialog(self, total):
+        self.progress_dialog = ProgressDialog(total=total, parent=self)
+        self.progress_dialog.show()

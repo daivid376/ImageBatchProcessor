@@ -1,6 +1,7 @@
 import os
 from src.ImageBatchProcessor_utils import process_image_v5
 from src.config import ImageProcessConfig
+
 class ImageBatchModel:
     def __init__(self):
         self.files = []
@@ -26,10 +27,12 @@ class ImageBatchModel:
                 added_files.append(f)
         return added_files
 
-    def process_all(self, config:ImageProcessConfig):
+    def process_one(self, file, config: ImageProcessConfig):
+        """处理单张图片并保存"""
         if not self.output_dir or not os.path.isdir(self.output_dir):
             os.makedirs(self.output_dir, exist_ok=True)
-        for file in self.files:
-            img_out = process_image_v5(file,config)
-            img_out.save(os.path.join(self.output_dir, "mod_" + os.path.basename(file)), quality=95)
 
+        img_out = process_image_v5(file, config)
+        output_path = os.path.join(self.output_dir, "mod_" + os.path.basename(file))
+        img_out.save(output_path, quality=95)
+        return output_path

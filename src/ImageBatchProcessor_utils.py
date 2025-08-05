@@ -22,7 +22,7 @@ def process_image_v5(image_path: str, config: ImageProcessConfig) -> Image.Image
     img_np = np.array(img)
 
     # Step 1: 水平翻转
-    if getattr(p, 'flip', False):
+    if getattr(p, 'hflip', False):
         img_np = cv2.flip(img_np, 1)
 
     # Step 2: 垂直翻转
@@ -59,5 +59,66 @@ def process_image_v5(image_path: str, config: ImageProcessConfig) -> Image.Image
     color_jitter = getattr(p, 'color_jitter', 0.02)
     factor = random.uniform(1 - color_jitter, 1 + color_jitter)
     img_np = np.clip(img_np * factor, 0, 255).astype(np.uint8)
-
+    
+    
+    distortion_strength =getattr(p, 'distortion_strength', 5)
+    distortion_smoothness =getattr(p, 'distortion_smoothness', 8)
+    if distortion_strength > 0:
+        img_np = apply_elastic_distortion(img_np, distortion_strength, distortion_smoothness)
+    
+    scale_x = getattr(p, 'scale_x', 1.0)
+    scale_y = getattr(p, 'scale_y', 1.0)
+    if scale_x != 1.0 or scale_y != 1.0:
+        img_np = scale_and_fill(img_np, scale_x, scale_y, mode='reflect')
+    # ✅ 返回 PIL Image
     return Image.fromarray(img_np)
+
+def apply_elastic_distortion(image, distortion_strength=5, distortion_smoothness=8):
+    """
+    对图像进行弹性形变处理
+    :param image: 输入图像 (numpy array)
+    :param distortion_strength: 形变强度 (alpha)
+    :param distortion_smoothness: 形变平滑度 (sigma)
+    :return: 扭曲后的图像
+    """
+    random_state = np.random.RandomState(None)
+    shape = image.shape[:2]
+
+    dx = (random_state.rand(*shape) * 2 - 1) * distortion_strength
+    dy = (random_state.rand(*shape) * 2 - 1) * distortion_strength
+
+    dx = cv2.GaussianBlur(dx, (17, 17), distortion_smoothness)
+    dy = cv2.GaussianBlur(dy, (17, 17), distortion_smoothness)
+
+    x, y = np.meshgrid(np.arange(shape[1]), np.arange(shape[0]))
+    map_x = (x + dx).astype(np.float32)
+    map_y = (y + dy).astype(np.float32)
+
+    return cv2.remap(image, map_x, map_y, interpolation=cv2.INTER_LINEAR, borderMode=cv2.BORDER_REFLECT)
+
+def scale_and_fill(img_np, scale_x=1.0, scale_y=1.0, mode='reflect'):
+    h, w = img_np.shape[:2]
+    new_w = int(w * scale_x)
+    new_h = int(h * scale_y)
+
+    # 缩放图像
+    img_resized = cv2.resize(img_np, (new_w, new_h), interpolation=cv2.INTER_LANCZOS4)
+
+    # 计算填充边距
+    pad_left = (w - new_w) // 2
+    pad_right = w - new_w - pad_left
+    pad_top = (h - new_h) // 2
+    pad_bottom = h - new_h - pad_top
+
+    if mode == 'reflect':
+        canvas = cv2.copyMakeBorder(img_resized, pad_top, pad_bottom, pad_left, pad_right, 
+                                    borderType=cv2.BORDER_REFLECT_101)
+    elif mode == 'blur':
+        bg = cv2.GaussianBlur(img_np, (51, 51), 30)
+        canvas = bg
+        canvas[pad_top:pad_top+new_h, pad_left:pad_left+new_w] = img_resized
+    else:
+        canvas = cv2.copyMakeBorder(img_resized, pad_top, pad_bottom, pad_left, pad_right,
+                                    borderType=cv2.BORDER_CONSTANT, value=(255,255,255))
+
+    return canvas
