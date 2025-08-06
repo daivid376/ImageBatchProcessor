@@ -70,6 +70,13 @@ def process_image_v5(image_path: str, config: ImageProcessConfig) -> Image.Image
     scale_y = getattr(p, 'scale_y', 1.0)
     if scale_x != 1.0 or scale_y != 1.0:
         img_np = scale_and_fill(img_np, scale_x, scale_y, mode='reflect')
+    
+    opacity = getattr(p, 'opacity', 1.0)
+    if opacity < 1.0:
+        # 转换为RGBA添加透明度
+        if img_np.shape[2] == 3:
+            img_np = cv2.cvtColor(img_np, cv2.COLOR_RGB2RGBA)
+        img_np[..., 3] = (img_np[..., 3].astype(np.float32) * opacity).astype(np.uint8)
     # ✅ 返回 PIL Image
     return Image.fromarray(img_np)
 

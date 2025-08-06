@@ -10,6 +10,14 @@ class ImageProcessConfig:
         "label": "垂直翻转",
         "tooltip": "是否将图片进行垂直翻转"
     })
+    opacity: float = field(default=1.0, metadata={
+        "label": "透明度调节",
+        "tooltip": "设置输出图像透明度 (0.0~1.0)",
+        "slider": True,
+        "min": 0.0,
+        "max": 1.0,
+        "step": 0.01
+    })
     noise_level: float = field(default=2.0, metadata={
         "label": "噪声强度",
         "tooltip": "添加微弱随机噪声，避免被平台识别"

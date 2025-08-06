@@ -2,10 +2,10 @@ import os,sys
 from PyQt6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QPushButton,
     QLineEdit, QFileDialog, QTreeWidget, QTreeWidgetItem, QLabel, QCheckBox,
-    QMessageBox, QAbstractItemView, QHeaderView, QProgressBar, QMenuBar, QMenu,QDialog,QApplication
+    QMessageBox, QAbstractItemView, QHeaderView, QProgressBar, QMenuBar, QMenu,QDialog,QApplication,QSlider,QDoubleSpinBox,QInputDialog, QStyleOptionSlider, QStyle
 )
-from PyQt6.QtCore import pyqtSignal, Qt, QSize, QSettings
-from PyQt6.QtGui import QPixmap, QImage, QIcon
+from PyQt6.QtCore import pyqtSignal, Qt, QSize, QSettings, QRect
+from PyQt6.QtGui import QPixmap, QImage, QIcon, QPainter, QColor, QFont, QPen, QBrush
 from PIL import Image
 from src.config import ImageProcessConfig
 from dataclasses import fields
@@ -32,7 +32,154 @@ class ProgressDialog(QDialog):
     def set_progress(self, value):
         self.progress_bar.setValue(value)
 
+class FloatSliderWidget(QSlider):
+    def __init__(self,
+                 minimum=0.0,
+                 maximum=1.0,
+                 step=0.01,
+                 init_value=1.0,
+                 parent=None):
+        super().__init__(Qt.Orientation.Horizontal, parent)
+        self._min = minimum
+        self._max = maximum
+        self._step = step
 
+        # 映射到内部 int 范围
+        self.setRange(0, int((maximum - minimum) / step))
+        self.setValue(int((init_value - minimum) / step))
+
+        # 固定尺寸：宽120，高24
+        self.setFixedWidth(80)
+        self.setFixedHeight(24)
+
+        # 准备两套样式：inactive / active
+
+        QSLIDER_BORDER = """
+        QSlider {
+            border: 1px inset #383838;   /* 整个控件的内凹边框 */
+            border-radius: 4px;         /* 高度 50px 时半径 25px */
+            background: transparent;
+        }
+        """
+
+        self._style_inactive = QSLIDER_BORDER + """
+        QSlider::groove:horizontal {
+            height: 16px;
+            background: #1c1c1c;
+            border-radius: 4px;
+            margin: 0px;
+            padding: 0px;
+        }
+        QSlider::sub-page:horizontal {
+            background: #383838;
+            border-radius: 4px;
+            
+            margin: 0px;
+            padding: 0px;
+            margin-left: -20px;
+            margin-right: -4px;
+        }
+        QSlider::add-page:horizontal {
+            background: transparent;
+            margin: 0px;
+            padding: 0px;
+        }
+        QSlider::handle:horizontal {
+            width: 12px;
+            height: 16px;
+            margin: -11px 0;
+            background: transparent;
+            border-radius: 6px;
+        }
+        """
+        self._style_active = QSLIDER_BORDER + """
+        QSlider::groove:horizontal {
+            height: 16px;
+            background: #1c1c1c;
+            border-radius: 4px;
+            margin: 0px;
+            padding: 0px;
+        }
+        QSlider::sub-page:horizontal {
+            background: #0a84ff;
+            border-radius: 4px;
+            margin: 0px;
+            padding: 0px;
+            margin-left: -20px;
+            margin-right: -4px;
+        }
+        QSlider::add-page:horizontal {
+            background: transparent;
+            margin: 0px;
+            padding: 0px;
+        }
+        QSlider::handle:horizontal {
+            width: 12px;
+            height: 16px;
+            margin: 0px 0;
+            background: transparent;
+            border-radius: 6px;
+            padding: 0px;
+        }
+        """
+
+        # 默认 inactive
+        self.setStyleSheet(self._style_inactive)
+
+        # 连接按下/释放信号，切换样式
+        self.sliderPressed.connect(lambda: self.setStyleSheet(self._style_active))
+        self.sliderReleased.connect(lambda: self.setStyleSheet(self._style_inactive))
+
+    def value_float(self) -> float:
+        return self._min + self.value() * self._step
+
+    def setValue_float(self, val):
+        try:
+            v = float(val)
+        except (ValueError, TypeError):
+            v = self._min
+        v = max(self._min, min(self._max, v))
+        self.setValue(int((v - self._min) / self._step))
+
+    def mouseDoubleClickEvent(self, event):
+        val, ok = QInputDialog.getDouble(
+            self, "输入数值", "值：",
+            self.value_float(),
+            self._min, self._max,
+            decimals=4
+        )
+        if ok:
+            self.setValue_float(val)
+    def mousePressEvent(self, e):
+        if e.buttons() & Qt.MouseButton.LeftButton:
+            x = e.position().x()
+            w = self.width()
+            ratio = max(0.0, min(1.0, x / w))
+            val = int(ratio * (self.maximum() - self.minimum())) + self.minimum()
+            self.setValue(val)
+            self.valueChanged.emit(self.value())
+        super().mousePressEvent(e)
+    def paintEvent(self, event):
+        # 先让 QSlider 正常画槽 + 交互
+        super().paintEvent(event)
+
+        # 再在槽区域中央画数值
+        opt = QStyleOptionSlider()
+        self.initStyleOption(opt)
+        groove = self.style().subControlRect(
+            QStyle.ComplexControl.CC_Slider, opt,
+            QStyle.SubControl.SC_SliderGroove, self)
+
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        painter.setPen(QColor(230, 230, 230))
+        painter.setFont(QFont("Segoe UI", 9))
+        painter.drawText(
+            groove,
+            Qt.AlignmentFlag.AlignCenter,
+            f"{self.value_float():.4f}"
+        )
+        painter.end()
 class DropLineEdit(QLineEdit):
     def __init__(self, callback=None, parent=None):
         super().__init__(parent)
@@ -58,6 +205,7 @@ class DropLineEdit(QLineEdit):
                 if self._callback:
                     self._callback(path)
 
+            
 class ImageBatchView(QMainWindow):
     files_dropped = pyqtSignal(list)
     output_folder_selected = pyqtSignal(str)
@@ -121,7 +269,20 @@ class ImageBatchView(QMainWindow):
         self.param_widgets = {}
         params_layout = QVBoxLayout()
         params_layout.setSpacing(5)
+        
+        self.build_dynamic_params(params_layout)
 
+        layout.addLayout(params_layout)
+
+        process_btn = QPushButton("开始处理")
+        process_btn.clicked.connect(self.emit_process)
+        layout.addWidget(process_btn)
+
+        self.load_settings()
+    def build_dynamic_params(self, parent_layout):
+        params_layout = QVBoxLayout()
+        params_layout.setSpacing(5)
+        
         for f in fields(ImageProcessConfig):
             row = QHBoxLayout()
             label_text = f.metadata.get("label", f.name)
@@ -134,6 +295,14 @@ class ImageBatchView(QMainWindow):
             if f.type == bool:
                 widget = QCheckBox()
                 widget.setChecked(getattr(ImageProcessConfig(), f.name))
+            elif f.metadata.get("slider", False):
+                widget = FloatSliderWidget(
+                    f.metadata.get("min", 0.0),
+                    f.metadata.get("max", 1.0),
+                    f.metadata.get("step", 0.01),
+                    getattr(ImageProcessConfig(), f.name)
+                )
+                widget.setValue_float(getattr(ImageProcessConfig(), f.name))
             else:
                 widget = QLineEdit(str(getattr(ImageProcessConfig(), f.name)))
                 widget.setFixedWidth(80)
@@ -147,15 +316,8 @@ class ImageBatchView(QMainWindow):
             row.addWidget(widget)
             row.addStretch()
             params_layout.addLayout(row)
-
-        layout.addLayout(params_layout)
-
-        process_btn = QPushButton("开始处理")
-        process_btn.clicked.connect(self.emit_process)
-        layout.addWidget(process_btn)
-
-        self.load_settings()
-
+        
+        parent_layout.addLayout(params_layout)
     def dragEnterEvent(self, event):
         if event.mimeData().hasUrls():
             event.acceptProposedAction()
@@ -190,6 +352,8 @@ class ImageBatchView(QMainWindow):
                 continue
             if isinstance(widget, QCheckBox):
                 kwargs[f.name] = widget.isChecked()
+            elif isinstance(widget, FloatSliderWidget):
+                kwargs[f.name] = widget.value_float()
             else:
                 text = widget.text()
                 if f.type == bool:
@@ -227,6 +391,8 @@ class ImageBatchView(QMainWindow):
                 default_value = getattr(default_config, f.name)
                 if isinstance(widget, QCheckBox):
                     widget.setChecked(default_value)
+                elif isinstance(widget, FloatSliderWidget):
+                    widget.setValue_float(default_value)
                 else:
                     widget.setText(str(default_value))
                     
@@ -258,6 +424,8 @@ class ImageBatchView(QMainWindow):
                 key = widget.objectName()
                 if isinstance(widget, QCheckBox):
                     self.settings.setValue(key, widget.isChecked())
+                elif isinstance(widget, FloatSliderWidget):
+                    self.settings.setValue(key, widget.value_float())
                 else:
                     self.settings.setValue(key, widget.text())
 
@@ -269,6 +437,8 @@ class ImageBatchView(QMainWindow):
                 if val is not None:
                     if isinstance(widget, QCheckBox):
                         widget.setChecked(str(val).lower() == 'true')
+                    elif isinstance(widget, FloatSliderWidget):
+                        widget.setValue_float(val)
                     else:
                         widget.setText(val)
         saved_dir = self.output_entry.text().strip()

@@ -5,6 +5,7 @@ from src.ImageBatchProcessor_model import ImageBatchModel
 from src.ImageBatchProcessor_presenter import ImageBatchPresenter
 from src.ImageBatchProcessor_view import ImageBatchView
 sys.path.append(os.path.dirname(__file__))
+APP_VERSION = '1.1.0'
 def resource_path(relative_path):
     """获取打包后的资源文件绝对路径"""
     if hasattr(sys, '_MEIPASS'):
@@ -14,6 +15,7 @@ def resource_path(relative_path):
     return os.path.join(base_path, relative_path)
 if __name__ == "__main__":
     app = QApplication(sys.argv)
+    app.setApplicationName(f"ImageBatchProcessor v{APP_VERSION}")
     base_dir = getattr(sys, '_MEIPASS', os.path.abspath(os.path.dirname(__file__)))
     icon_path = os.path.join(base_dir, "resources", "app_icon.ico")
     if os.path.exists(icon_path):

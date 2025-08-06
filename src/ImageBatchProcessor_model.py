@@ -33,6 +33,7 @@ class ImageBatchModel:
             os.makedirs(self.output_dir, exist_ok=True)
 
         img_out = process_image_v5(file, config)
-        output_path = os.path.join(self.output_dir, "mod_" + os.path.basename(file))
-        img_out.save(output_path, quality=95)
+        name, _ = os.path.splitext(os.path.basename(file))
+        output_path = os.path.join(self.output_dir, f"mod_{name}.png")
+        img_out.save(output_path, format="PNG")
         return output_path
