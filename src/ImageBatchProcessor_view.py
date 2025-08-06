@@ -1,16 +1,16 @@
-import os,sys
+import os,sys,json
+from dataclasses import asdict
 from PyQt6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QPushButton,
     QLineEdit, QFileDialog, QTreeWidget, QTreeWidgetItem, QLabel, QCheckBox,
     QMessageBox, QAbstractItemView, QHeaderView, QProgressBar, QMenuBar, QMenu,QDialog,QApplication,QSlider,QDoubleSpinBox,QInputDialog, QStyleOptionSlider, QStyle
 )
-from PyQt6.QtCore import pyqtSignal, Qt, QSize, QSettings, QRect
+from PyQt6.QtCore import pyqtSignal, Qt, QSize, QSettings, QRect,pyqtSlot
 from PyQt6.QtGui import QPixmap, QImage, QIcon, QPainter, QColor, QFont, QPen, QBrush
 from PIL import Image
 from src.config import ImageProcessConfig
+from src import __version__ ,get_resource_path
 from dataclasses import fields
-from PyQt6.QtWidgets import QDialog, QVBoxLayout, QLabel, QProgressBar
-from PyQt6.QtCore import pyqtSlot
 
 class ProgressDialog(QDialog):
     def __init__(self, total=100, parent=None):
@@ -46,8 +46,9 @@ class FloatSliderWidget(QSlider):
 
         # 映射到内部 int 范围
         self.setRange(0, int((maximum - minimum) / step))
-        self.setValue(int((init_value - minimum) / step))
-
+        super().setValue(int((init_value - minimum) / step))
+    
+        
         # 固定尺寸：宽120，高24
         self.setFixedWidth(80)
         self.setFixedHeight(24)
@@ -129,27 +130,26 @@ class FloatSliderWidget(QSlider):
         # 连接按下/释放信号，切换样式
         self.sliderPressed.connect(lambda: self.setStyleSheet(self._style_active))
         self.sliderReleased.connect(lambda: self.setStyleSheet(self._style_inactive))
-
-    def value_float(self) -> float:
-        return self._min + self.value() * self._step
-
-    def setValue_float(self, val):
+    def value(self) -> float:
+        return self._min + super().value() * self._step
+        
+    def setValue(self, val):
+        """接收 float 或 int 设置数值"""
         try:
             v = float(val)
         except (ValueError, TypeError):
             v = self._min
-        v = max(self._min, min(self._max, v))
-        self.setValue(int((v - self._min) / self._step))
-
+        int_val = int((v - self._min) / self._step)
+        super().setValue(int_val)
     def mouseDoubleClickEvent(self, event):
         val, ok = QInputDialog.getDouble(
             self, "输入数值", "值：",
-            self.value_float(),
+            self.value(),
             self._min, self._max,
             decimals=4
         )
         if ok:
-            self.setValue_float(val)
+            self.setValue(val)
     def mousePressEvent(self, e):
         if e.buttons() & Qt.MouseButton.LeftButton:
             x = e.position().x()
@@ -157,7 +157,7 @@ class FloatSliderWidget(QSlider):
             ratio = max(0.0, min(1.0, x / w))
             val = int(ratio * (self.maximum() - self.minimum())) + self.minimum()
             self.setValue(val)
-            self.valueChanged.emit(self.value())
+            self.valueChanged.emit(int(self.value()))
         super().mousePressEvent(e)
     def paintEvent(self, event):
         # 先让 QSlider 正常画槽 + 交互
@@ -177,7 +177,7 @@ class FloatSliderWidget(QSlider):
         painter.drawText(
             groove,
             Qt.AlignmentFlag.AlignCenter,
-            f"{self.value_float():.4f}"
+            f"{self.value():.4f}"
         )
         painter.end()
 class DropLineEdit(QLineEdit):
@@ -239,7 +239,27 @@ class ImageBatchView(QMainWindow):
         reset_action = param_menu.addAction("重置为默认值")
         reset_action.triggered.connect(self.reset_parameters)
         menu_bar.addMenu(param_menu)
+        # === 预设菜单 ===
+        preset_menu = QMenu("预设", self)
+        self.menu_presets = preset_menu
 
+        save_action = preset_menu.addAction("保存当前预设")
+        save_action.triggered.connect(self.save_preset)
+
+        self.load_menu = preset_menu.addMenu("加载预设")
+        self.delete_menu = preset_menu.addMenu("删除预设")
+
+        menu_bar.addMenu(preset_menu)
+
+        self.refresh_presets_menu()
+        # === 帮助菜单 ===
+        help_menu = QMenu("帮助", self)
+
+        about_action = help_menu.addAction("关于")
+        about_action.triggered.connect(self.show_about_dialog)
+
+        menu_bar.addMenu(help_menu)
+        # 主体布局
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
         layout = QVBoxLayout(central_widget)
@@ -264,7 +284,11 @@ class ImageBatchView(QMainWindow):
         out_layout.addWidget(self.output_entry)
         out_layout.addWidget(out_btn)
         layout.addLayout(out_layout)
-
+        
+        # 清空列表
+        clear_btn = QPushButton("清空列表")
+        clear_btn.clicked.connect(self.clear_all_items)
+        layout.addWidget(clear_btn)
         # ==== 动态参数控件区 ====
         self.param_widgets = {}
         params_layout = QVBoxLayout()
@@ -302,7 +326,7 @@ class ImageBatchView(QMainWindow):
                     f.metadata.get("step", 0.01),
                     getattr(ImageProcessConfig(), f.name)
                 )
-                widget.setValue_float(getattr(ImageProcessConfig(), f.name))
+                widget.setValue(getattr(ImageProcessConfig(), f.name))
             else:
                 widget = QLineEdit(str(getattr(ImageProcessConfig(), f.name)))
                 widget.setFixedWidth(80)
@@ -353,7 +377,7 @@ class ImageBatchView(QMainWindow):
             if isinstance(widget, QCheckBox):
                 kwargs[f.name] = widget.isChecked()
             elif isinstance(widget, FloatSliderWidget):
-                kwargs[f.name] = widget.value_float()
+                kwargs[f.name] = widget.value()
             else:
                 text = widget.text()
                 if f.type == bool:
@@ -391,11 +415,63 @@ class ImageBatchView(QMainWindow):
                 default_value = getattr(default_config, f.name)
                 if isinstance(widget, QCheckBox):
                     widget.setChecked(default_value)
-                elif isinstance(widget, FloatSliderWidget):
-                    widget.setValue_float(default_value)
-                else:
+                elif hasattr(widget, "setValue"):
+                    try:
+                        widget.setValue(float(default_value))
+                    except Exception:
+                        try:
+                            widget.setValue(int(default_value))
+                        except Exception:
+                            pass
+                elif hasattr(widget, "setText"):
                     widget.setText(str(default_value))
-                    
+    
+    def save_preset(self):
+        name, ok = QInputDialog.getText(self, "保存预设", "输入预设名称：")
+        if ok and name:
+            config = self.collect_parameters()
+            data = json.dumps(asdict(config))
+            self.settings.setValue(f"Presets/{name}", data)
+            self.refresh_presets_menu()     
+    def load_preset(self, name):
+        data = self.settings.value(f"Presets/{name}")
+        if data:
+            params = json.loads(data)
+            for key, val in params.items():
+                widget = self.param_widgets.get(key)
+                if widget:
+                    if isinstance(widget, QCheckBox):
+                        widget.setChecked(val)
+                    elif hasattr(widget, "setValue"):
+                        try:
+                            widget.setValue(float(val))
+                        except Exception:
+                            try:
+                                widget.setValue(int(val))
+                            except Exception:
+                                pass
+                    elif hasattr(widget, "setText"):
+                        widget.setText(str(val))
+                        
+    def delete_preset(self, name):
+        self.settings.remove(f"Presets/{name}")
+        self.refresh_presets_menu()
+
+    def refresh_presets_menu(self):
+        # 清空子菜单
+        self.load_menu.clear()
+        self.delete_menu.clear()
+        # 获取所有预设
+        self.settings.beginGroup("Presets")
+        names = self.settings.allKeys()
+        self.settings.endGroup()
+
+        for name in names:
+            load_action = self.load_menu.addAction(name)
+            load_action.triggered.connect(lambda checked, n=name: self.load_preset(n))
+            del_action = self.delete_menu.addAction(name)
+            del_action.triggered.connect(lambda checked, n=name: self.delete_preset(n))
+
     def add_file_item(self, path):
         size = self.tree.iconSize().width()
         item = QTreeWidgetItem(["", path])
@@ -407,7 +483,9 @@ class ImageBatchView(QMainWindow):
         item.setIcon(0, icon)
         self.tree.addTopLevelItem(item)
         self.tree.setIconSize(QPixmap.fromImage(img_qt).size())
-
+    def clear_all_items(self):
+        self.tree.clear()
+        self.file_removed.emit("__CLEAR_ALL__")
     def keyPressEvent(self, event):
         if event.key() == Qt.Key.Key_Delete:
             for item in self.tree.selectedItems():
@@ -424,9 +502,9 @@ class ImageBatchView(QMainWindow):
                 key = widget.objectName()
                 if isinstance(widget, QCheckBox):
                     self.settings.setValue(key, widget.isChecked())
-                elif isinstance(widget, FloatSliderWidget):
-                    self.settings.setValue(key, widget.value_float())
-                else:
+                elif hasattr(widget, "value"):
+                    self.settings.setValue(key, widget.value())
+                elif hasattr(widget, "text"):
                     self.settings.setValue(key, widget.text())
 
     def load_settings(self):
@@ -437,9 +515,9 @@ class ImageBatchView(QMainWindow):
                 if val is not None:
                     if isinstance(widget, QCheckBox):
                         widget.setChecked(str(val).lower() == 'true')
-                    elif isinstance(widget, FloatSliderWidget):
-                        widget.setValue_float(val)
-                    else:
+                    elif hasattr(widget, "value"):
+                        widget.setValue(val)
+                    elif hasattr(widget, "text"):
                         widget.setText(val)
         saved_dir = self.output_entry.text().strip()
         if saved_dir:
@@ -456,3 +534,15 @@ class ImageBatchView(QMainWindow):
     def show_progress_dialog(self, total):
         self.progress_dialog = ProgressDialog(total=total, parent=self)
         self.progress_dialog.show()
+    def show_about_dialog(self):
+        changelog_path = get_resource_path("Changelog.md")
+        changelog_text = "更新日志文件未找到"
+        if os.path.exists(changelog_path):
+            with open(changelog_path, "r", encoding="utf-8") as f:
+                changelog_text = f.read()
+
+        QMessageBox.information(
+            self,
+            "关于 ImageBatchProcessor",
+            f"版本: {__version__}\n\n{changelog_text}"
+        )

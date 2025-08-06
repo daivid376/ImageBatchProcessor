@@ -5,7 +5,7 @@ a = Analysis(
     ['src\\ImageBatchProcessor_main.py'],
     pathex=[],
     binaries=[],
-    datas=[('src\\style.qss', 'src'), ('src\\resources\\app_icon.ico', 'resources')],
+    datas=[('src\\style.qss', 'src'), ('src\\resources\\app_icon.ico', 'resources'), ('Changelog.md', '.')],
     hiddenimports=[],
     hookspath=[],
     hooksconfig={},

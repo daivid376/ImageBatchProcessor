@@ -111,21 +111,27 @@ def scale_and_fill(img_np, scale_x=1.0, scale_y=1.0, mode='reflect'):
     # 缩放图像
     img_resized = cv2.resize(img_np, (new_w, new_h), interpolation=cv2.INTER_LANCZOS4)
 
-    # 计算填充边距
-    pad_left = (w - new_w) // 2
-    pad_right = w - new_w - pad_left
-    pad_top = (h - new_h) // 2
-    pad_bottom = h - new_h - pad_top
+    if new_w <= w and new_h <= h:
+        # ====== 缩小情况：需要填充 ======
+        pad_left = (w - new_w) // 2
+        pad_right = w - new_w - pad_left
+        pad_top = (h - new_h) // 2
+        pad_bottom = h - new_h - pad_top
 
-    if mode == 'reflect':
-        canvas = cv2.copyMakeBorder(img_resized, pad_top, pad_bottom, pad_left, pad_right, 
-                                    borderType=cv2.BORDER_REFLECT_101)
-    elif mode == 'blur':
-        bg = cv2.GaussianBlur(img_np, (51, 51), 30)
-        canvas = bg
-        canvas[pad_top:pad_top+new_h, pad_left:pad_left+new_w] = img_resized
+        if mode == 'reflect':
+            canvas = cv2.copyMakeBorder(img_resized, pad_top, pad_bottom, pad_left, pad_right, 
+                                        borderType=cv2.BORDER_REFLECT_101)
+        elif mode == 'blur':
+            bg = cv2.GaussianBlur(img_np, (51, 51), 30)
+            canvas = bg
+            canvas[pad_top:pad_top+new_h, pad_left:pad_left+new_w] = img_resized
+        else:
+            canvas = cv2.copyMakeBorder(img_resized, pad_top, pad_bottom, pad_left, pad_right,
+                                        borderType=cv2.BORDER_CONSTANT, value=(255,255,255))
     else:
-        canvas = cv2.copyMakeBorder(img_resized, pad_top, pad_bottom, pad_left, pad_right,
-                                    borderType=cv2.BORDER_CONSTANT, value=(255,255,255))
+        # ====== 放大情况：裁剪中间部分 ======
+        start_x = max((new_w - w) // 2, 0)
+        start_y = max((new_h - h) // 2, 0)
+        canvas = img_resized[start_y:start_y+h, start_x:start_x+w]
 
     return canvas

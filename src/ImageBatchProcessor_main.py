@@ -5,23 +5,18 @@ from src.ImageBatchProcessor_model import ImageBatchModel
 from src.ImageBatchProcessor_presenter import ImageBatchPresenter
 from src.ImageBatchProcessor_view import ImageBatchView
 sys.path.append(os.path.dirname(__file__))
-APP_VERSION = '1.1.0'
-def resource_path(relative_path):
-    """获取打包后的资源文件绝对路径"""
-    if hasattr(sys, '_MEIPASS'):
-        base_path = sys._MEIPASS
-    else:
-        base_path = os.path.abspath(".")
-    return os.path.join(base_path, relative_path)
+from src import __version__ 
+from src import get_resource_path
+
 if __name__ == "__main__":
     app = QApplication(sys.argv)
-    app.setApplicationName(f"ImageBatchProcessor v{APP_VERSION}")
+    app.setApplicationName(f"ImageBatchProcessor v{__version__}")
     base_dir = getattr(sys, '_MEIPASS', os.path.abspath(os.path.dirname(__file__)))
     icon_path = os.path.join(base_dir, "resources", "app_icon.ico")
     if os.path.exists(icon_path):
         app.setWindowIcon(QIcon(icon_path))
     try:
-        qss_path = resource_path("src/style.qss")
+        qss_path = get_resource_path("src/style.qss")
         with open(qss_path, "r", encoding="utf-8") as f:
             app.setStyleSheet(f.read())
     except Exception as e:

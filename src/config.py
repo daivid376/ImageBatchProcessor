@@ -58,3 +58,7 @@ class ImageProcessConfig:
         "label": "垂直缩放",
         "tooltip": "垂直方向缩放倍数"
     })
+    overwrite: bool = field(default=True, metadata={
+    "label": "覆盖已存在文件",
+    "tooltip": "若勾选，则处理结果会覆盖已有文件，否则自动重命名"
+    })

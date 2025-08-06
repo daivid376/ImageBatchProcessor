@@ -63,3 +63,8 @@ class ImageBatchPresenter:
         #QTimer.singleShot(200, lambda: QMessageBox.information(self.view, "完成", "图片处理完成！"))
         QMessageBox.information(self.view, "完成", "图片处理完成！")
         
+    def handle_remove_file(self, filepath):
+        if filepath == "__CLEAR_ALL__":
+            self.model.files.clear()
+        elif filepath in self.model.files:
+            self.model.files.remove(filepath)
