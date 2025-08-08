@@ -1,4 +1,16 @@
 from dataclasses import dataclass, field
+@dataclass
+class GlobalConfig:
+    """
+    全局配置类，包含应用的基本设置。
+    """
+    remote_network_drive_dir:str= "C:/Users/admin/Nutstore/1/Temu资源"
+    host: str = "100.83.51.62"
+    port: int = 8188
+    comfy_base_path = "C:/Users/admin/Documents/ComfyUI"
+    ai_process_temp_input = "100_Tools/ImageBatchProcessor/AI_process_temp/comfy_api_input"
+    ai_process_temp_output = "100_Tools/ImageBatchProcessor/AI_process_temp/comfy_api_output"
+
 
 @dataclass
 class ImageProcessConfig:
@@ -62,3 +74,5 @@ class ImageProcessConfig:
     "label": "覆盖已存在文件",
     "tooltip": "若勾选，则处理结果会覆盖已有文件，否则自动重命名"
     })
+    
+    

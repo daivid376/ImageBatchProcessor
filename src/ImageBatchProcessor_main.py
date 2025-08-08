@@ -3,7 +3,7 @@ from PyQt6.QtWidgets import QApplication
 from PyQt6.QtGui import QIcon
 from src.ImageBatchProcessor_model import ImageBatchModel
 from src.ImageBatchProcessor_presenter import ImageBatchPresenter
-from src.ImageBatchProcessor_view import ImageBatchView
+from src.ui.ImageBatchProcessor_view import ImageBatchView
 sys.path.append(os.path.dirname(__file__))
 from src import __version__ 
 from src import get_resource_path
