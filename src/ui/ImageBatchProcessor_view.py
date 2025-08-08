@@ -13,7 +13,8 @@ from src import __version__ ,get_resource_path
 from dataclasses import fields
 from src.ui.common_widgets import ProgressDialog, FloatSliderWidget, DropLineEdit
 from src.ui.menu_bar import MenuManager  
-from src.ui.comfyui_section import ComfyUISection       
+from src.ui.comfyui_section import ComfyUISection
+from src.config import GlobalConfig    
 class ImageBatchView(QMainWindow):
     files_dropped = pyqtSignal(list)
     output_folder_selected = pyqtSignal(str)
@@ -26,7 +27,7 @@ class ImageBatchView(QMainWindow):
         self.setGeometry(100, 100, 900, 700)
         
         self.setAcceptDrops(True)
-        self.settings = QSettings("EleFlyStudio", "ImageBatchProcessor")
+        self.settings = QSettings(GlobalConfig.APP_ORG, GlobalConfig.APP_NAME)
 
         # 设置窗口图标
         base_dir = getattr(sys, '_MEIPASS', os.path.abspath(os.path.dirname(__file__)))

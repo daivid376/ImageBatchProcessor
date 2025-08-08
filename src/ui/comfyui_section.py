@@ -1,19 +1,22 @@
+from pathlib import Path
 from PyQt6.QtWidgets import QWidget, QVBoxLayout, QComboBox, QPushButton, QLabel, QProgressBar, QFileDialog, QMessageBox, QHBoxLayout,QLineEdit
-from PyQt6.QtCore import Qt,QTimer,pyqtSignal
+from PyQt6.QtCore import Qt,QTimer,pyqtSignal,QSettings
 from PyQt6.QtGui import QIcon
 import os
 
 from src import get_resource_path
 from src.ui.common_widgets import CustomComboBox
-
+from src.config import GlobalConfig
 
 class ComfyUISection(QWidget):
     submit_comfy_task = pyqtSignal(dict) 
     def __init__(self):
         super().__init__()
         self.setWindowTitle("ComfyUI 任务管理")
+        self.settings = QSettings(GlobalConfig.APP_ORG, GlobalConfig.APP_NAME)
         
         layout = QVBoxLayout(self)
+        self.local_network_root = None
 
         # Add section label
         self.title_label = QLabel("ComfyUI 任务管理", self)
@@ -27,6 +30,12 @@ class ComfyUISection(QWidget):
         self.local_network_drive_input.setObjectName("local_network_drive_input")
         self.local_network_drive_input.setProperty("persist", True)
         self.local_network_drive_input.setPlaceholderText("选择本地共享网盘根目录")
+        
+        self.local_network_drive_input.returnPressed.connect(self.update_from_input_dir)
+        self.local_network_drive_input.editingFinished.connect(self.update_from_input_dir) 
+        lastPath = self.settings.value("local_network_drive_input", "")
+        self.local_network_drive_input.setText(lastPath)
+        
 
         # 按钮选择共享网盘目录
         self.select_folder_button = QPushButton("选择文件夹", self)
@@ -93,41 +102,54 @@ class ComfyUISection(QWidget):
         layout.addLayout(progress_layout)
 
         self.setLayout(layout)
-    def _assets_path(self,*parts):
-        # 统一从 MEIPASS 或项目根解析资源
-        return get_resource_path(os.path.join("comfyui_assets", *parts))
+        
+        #开始时需要调用函数区
+        self.update_from_input_dir()
+    def _update_project_paths(self):
+        root_text = self.local_network_drive_input.text().strip()
+        self.local_network_root = Path(root_text)
+        self.comfy_assets_dir = self.local_network_root / GlobalConfig.code_project_root_rel_dir / GlobalConfig.comfy_assets_rel_dir
+        
     def select_folder(self):
         folder = QFileDialog.getExistingDirectory(self, "选择共享网盘根目录")
         if folder:
             self.local_network_drive_input.setText(folder)
+            self.update_from_input_dir()
+    
     def load_workflows(self):
-        folder_path = self._assets_path("workflows")
+        self._update_project_paths()
+        workflows_dir = self.comfy_assets_dir/ "workflows"
         self.workflow_select.clear()
-        if not os.path.isdir(folder_path):
-            # 可选：更直观的错误提示，便于你排查
+        if not workflows_dir.is_dir():
             self.workflow_select.addItem("<空>")
-            print("Workflows not found at:", folder_path)
             return
-        files = [f for f in os.listdir(folder_path) if os.path.isfile(os.path.join(folder_path, f))]
+        else:
+            files = [f for f in workflows_dir.glob("*.json") if f.is_file()]
         if files:
             for f in files:
-                self.workflow_select.addItem(f)
+                self.workflow_select.addItem(f.name)
         else:
             self.workflow_select.addItem("<空>")
 
     def load_prompts(self):
-        folder_path = self._assets_path("prompts")
+        self._update_project_paths()
+        prompts_dir = self.comfy_assets_dir/ "prompts"
         self.prompt_select.clear()
-        if not os.path.isdir(folder_path):
+        if not prompts_dir.is_dir():
             self.prompt_select.addItem("<空>")
-            print("Prompts not found at:", folder_path)
             return
-        files = [f for f in os.listdir(folder_path) if os.path.isfile(os.path.join(folder_path, f))]
+        else:
+            files = [f for f in prompts_dir.glob("*.txt") if f.is_file()]
         if files:
             for f in files:
-                self.prompt_select.addItem(f)
+                self.prompt_select.addItem(f.name)
         else:
             self.prompt_select.addItem("<空>")
+    def update_from_input_dir(self):
+        input_dir = self.local_network_drive_input.text().strip()
+        self.local_network_root = Path(input_dir)
+        self.load_workflows()
+        self.load_prompts()
 
     def submit_task(self):
         """提交任务（仅负责收集UI选项）"""

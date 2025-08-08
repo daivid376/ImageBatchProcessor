@@ -224,8 +224,8 @@ class CustomComboBox(QComboBox):
 
     def showPopup(self):
         try:
-            if callable(self._refresh_fn):
-                self._refresh_fn()
+            if callable(self.OnRefresh):
+                self.OnRefresh()
         except Exception as e:
             # 避免刷新异常影响弹出
             print("Combo refresh error:", e)

@@ -8,14 +8,14 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtCore import QSettings
 from src import __version__
-from src.config import ImageProcessConfig
+from src.config import GlobalConfig, ImageProcessConfig
 from src import get_resource_path
 
 
 class MenuManager:
     def __init__(self, view):
         self.view = view
-        self.settings = QSettings("EleFlyStudio", "ImageBatchProcessor")
+        self.settings = QSettings(GlobalConfig.APP_ORG, GlobalConfig.APP_NAME)
 
     def build(self) -> QMenuBar:
         menu_bar = QMenuBar(self.view)

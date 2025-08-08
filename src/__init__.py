@@ -1,5 +1,5 @@
 import sys,os
-__version__ = "1.2.0"
+__version__ = "1.2.1"
 
 def get_resource_path(relative_path):
     if hasattr(sys, '_MEIPASS'):

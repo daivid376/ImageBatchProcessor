@@ -28,12 +28,12 @@ class WorkflowManager:
 
         # 本地中转输入目录（落盘位置）
         self.local_input_dir = os.path.join(
-            self.local_root, GlobalConfig.ai_process_temp_input
+            self.local_root, GlobalConfig.ai_temp_input
         )
 
         # 远端可见的中转输入目录（服务器眼中的绝对路径前缀）
         self.remote_input_dir = os.path.join(
-            GlobalConfig.remote_network_drive_dir, GlobalConfig.ai_process_temp_input
+            GlobalConfig.remote_network_drive_dir, GlobalConfig.ai_temp_input
         )
 
         os.makedirs(self.local_input_dir, exist_ok=True)
