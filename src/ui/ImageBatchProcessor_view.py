@@ -57,9 +57,11 @@ class ImageBatchView(QMainWindow):
 
         # 输出目录选择
         out_layout = QHBoxLayout()
-        self.output_entry = DropLineEdit(self.output_folder_selected.emit, self)
+        self.output_entry = DropLineEdit(self,'输出目录: ')
         self.output_entry.setObjectName("output_dir")
         self.output_entry.setProperty("persist", True)
+        self.output_entry.pathSelectedSignal.connect(self.output_folder_selected)
+        
         out_btn = QPushButton("选择输出文件夹")
         out_btn.clicked.connect(self.select_output_folder)
         out_layout.addWidget(self.output_entry)

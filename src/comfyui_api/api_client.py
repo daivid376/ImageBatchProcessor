@@ -2,7 +2,7 @@
 # src/comfy_api_client.py
 
 from datetime import time as timeModule
-import time
+import time as pyt
 import requests,json
 import socket
 from typing import List
@@ -31,33 +31,9 @@ class ComfyApiClient:
         except Exception:
             return False
         
-    def wait_for_input_file(self, rel_input: str, timeout: float = 180.0, interval: float = 2.0) :
-        if "/" not in rel_input:
-            raise ValueError(f"rel_input 不是 '子目录/文件名' 格式: {rel_input}")
-
-        subfolder, filename = rel_input.split("/", 1)
-        params = {
-            "filename": filename,
-            "subfolder": subfolder,
-            "type": "input",   # 关键：从 input 里读取
-        }
-
-        deadline = time.time() + timeout
-        last_status = None
-        while time.time() < deadline:
-            try:
-                r = requests.get(f"{self.base_url}/view", params=params, timeout=5)
-                last_status = r.status_code
-                if r.status_code == 200:
-                    return  # 就绪
-            except Exception as e:
-                last_status = str(e)
-            time.sleep(interval)
-
-        raise TimeoutError(f"等待文件出现在 ComfyUI input 超时（{timeout:.0f}s）: {rel_input}，最后状态: {last_status}")
     def submit(self, payload: dict):
         """
-        提交一个 ComfyUI 任务。返回任务 prompt_id。
+        提交一个 ComfyUI 任务，返回 prompt_id
         """
         url = f"{self.base_url}/prompt"
         try:
@@ -65,16 +41,16 @@ class ComfyApiClient:
             payload_str = json.dumps(payload, ensure_ascii=False)
             r = self.session.post(url, data=payload_str.encode("utf-8"), headers=headers, timeout=15)
             r.raise_for_status()
-            print('payload: ', payload)
-            return r.json().get("prompt_id", "")
+            prompt_id = r.json().get("prompt_id", "")
+            print(f"✅ 提交成功，prompt_id: {prompt_id}")
+            return prompt_id
         except requests.HTTPError as e:
             print("STATUS:", e.response.status_code)
             try:
-                print("DETAIL:", e.response.text)  # 这里通常会写明是哪个节点/字段不合法
+                print("DETAIL:", e.response.text)
             except Exception:
                 pass
             raise
-
         except Exception as e:
             print(f"❌ 提交失败: {e}")
             raise

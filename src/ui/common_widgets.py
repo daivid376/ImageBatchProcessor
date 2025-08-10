@@ -3,9 +3,9 @@ from PyQt6.QtWidgets import (
     QDialog, QVBoxLayout, QLabel, QProgressBar, QComboBox
 )
 from PyQt6.QtGui import QPainter,QColor, QFont, QPen, QBrush
-from PyQt6.QtCore import Qt, pyqtSlot
+from PyQt6.QtCore import Qt, pyqtSlot,pyqtSignal
 from PyQt6.QtWidgets import (
-    QDialog, QVBoxLayout, QLabel, QProgressBar,QSlider, QLineEdit, QInputDialog, QStyle, QStyleOptionSlider
+    QDialog, QVBoxLayout, QLabel, QProgressBar,QSlider, QLineEdit, QInputDialog, QStyle, QStyleOptionSlider,QHBoxLayout,QWidget
 )
 class ProgressDialog(QDialog):
     def __init__(self, total=100, parent=None):
@@ -192,12 +192,32 @@ class FloatSliderWidget(QSlider):
             f"{self.value():.4f}"
         )
         painter.end()
-class DropLineEdit(QLineEdit):
-    def __init__(self, callback=None, parent=None):
+class DropLineEdit(QWidget):
+    pathSelectedSignal = pyqtSignal(str)
+    def __init__(self, parent=None,label_text = ''):
         super().__init__(parent)
-        self.setAcceptDrops(True)
-        self._callback = callback
+        
+        self.label = QLabel(label_text)
+        self.line_edit = QLineEdit()
+        
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
+        layout.addWidget(self.label)
+        layout.addWidget(self.line_edit)
 
+        self.setAcceptDrops(True)
+        self.line_edit.editingFinished.connect(self._on_edit_finished)
+
+    def text(self): return self.line_edit.text()
+    def setText(self, text): self.line_edit.setText(text)
+    def setPlaceholderText(self, text): self.line_edit.setPlaceholderText(text)
+    def setReadOnly(self, readonly): self.line_edit.setReadOnly(readonly)
+    def clear(self): self.line_edit.clear()
+    def setFocus(self): self.line_edit.setFocus()
+    def _on_edit_finished(self):
+        path = self.text().strip()
+        self.pathSelectedSignal.emit(path)
     def dragEnterEvent(self, event):
         if event.mimeData().hasUrls():
             urls = event.mimeData().urls()
@@ -212,10 +232,8 @@ class DropLineEdit(QLineEdit):
         urls = event.mimeData().urls()
         if urls:
             path = urls[0].toLocalFile()
-            if os.path.isdir(path):
-                self.setText(path)
-                if self._callback:
-                    self._callback(path)
+            self.setText(path)
+            self._on_edit_finished()
 
 class CustomComboBox(QComboBox):
     def __init__(self,OnRefresh = None, parent=None):

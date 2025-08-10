@@ -8,6 +8,7 @@ class ImageBatchModel:
         self.output_dir = ""
 
     def set_output_dir(self, path):
+        print('set_output_dir: ', path)
         self.output_dir = path
 
     def add_files(self, paths):
@@ -29,17 +30,21 @@ class ImageBatchModel:
 
     def process_one(self, file, config: ImageProcessConfig):
         """处理单张图片并保存"""
+        print('process_one file: ', file)
         if not self.output_dir or not os.path.isdir(self.output_dir):
             os.makedirs(self.output_dir, exist_ok=True)
 
         img_out = process_image_v5(file, config)
+        print('img_out: ', img_out)
         name, _ = os.path.splitext(os.path.basename(file))
         output_path = os.path.join(self.output_dir, f"mod_{name}.png")
+        print('output_path: ', output_path)
 
         # 如果不允许覆盖，自动重命名
         if not config.overwrite:
             counter = 1
             while os.path.exists(output_path):
+                print('output_path: ', output_path)
                 output_path = os.path.join(self.output_dir, f"mod_{name}_{counter}.png")
                 counter += 1
 

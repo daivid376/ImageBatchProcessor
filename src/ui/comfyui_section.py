@@ -4,10 +4,9 @@ from PyQt6.QtCore import Qt,QTimer,pyqtSignal,QSettings
 from PyQt6.QtGui import QIcon
 import os
 
-from src import get_resource_path
 from src.ui.common_widgets import CustomComboBox
 from src.config import GlobalConfig
-
+from src.ui.common_widgets import DropLineEdit
 class ComfyUISection(QWidget):
     submit_comfy_task = pyqtSignal(dict) 
     def __init__(self):
@@ -17,6 +16,7 @@ class ComfyUISection(QWidget):
         
         layout = QVBoxLayout(self)
         self.local_network_root = None
+        
 
         # Add section label
         self.title_label = QLabel("ComfyUI 任务管理", self)
@@ -26,13 +26,12 @@ class ComfyUISection(QWidget):
         
         folder_layout = QHBoxLayout()
         # 本地共享网盘根目录输入框
-        self.local_network_drive_input = QLineEdit(self)
+        self.local_network_drive_input = DropLineEdit(self,'本地共享网盘根目录: ')
         self.local_network_drive_input.setObjectName("local_network_drive_input")
         self.local_network_drive_input.setProperty("persist", True)
         self.local_network_drive_input.setPlaceholderText("选择本地共享网盘根目录")
+        self.local_network_drive_input.pathSelectedSignal.connect(self.update_from_input_dir)
         
-        self.local_network_drive_input.returnPressed.connect(self.update_from_input_dir)
-        self.local_network_drive_input.editingFinished.connect(self.update_from_input_dir) 
         lastPath = self.settings.value("local_network_drive_input", "")
         self.local_network_drive_input.setText(lastPath)
         
@@ -121,6 +120,7 @@ class ComfyUISection(QWidget):
         workflows_dir = self.comfy_assets_dir/ "workflows"
         self.workflow_select.clear()
         if not workflows_dir.is_dir():
+            print('add kong')
             self.workflow_select.addItem("<空>")
             return
         else:
@@ -146,6 +146,7 @@ class ComfyUISection(QWidget):
         else:
             self.prompt_select.addItem("<空>")
     def update_from_input_dir(self):
+        print('update_from_input_dir: ')
         input_dir = self.local_network_drive_input.text().strip()
         self.local_network_root = Path(input_dir)
         self.load_workflows()
@@ -157,7 +158,6 @@ class ComfyUISection(QWidget):
         # Step 1: 获取用户在界面中选择的内容
         selected_workflow = self.workflow_select.currentText()
         selected_prompt = self.prompt_select.currentText()
-        base_dir = self.local_network_drive_input.text().strip()
 
         # Step 2: 简单校验
         if not selected_workflow or selected_workflow == "<空>":
@@ -166,17 +166,33 @@ class ComfyUISection(QWidget):
         if not selected_prompt or selected_prompt == "<空>":
             self.show_error("请选择提示词文件！")
             return
-        if not os.path.isdir(base_dir):
+        if not os.path.isdir(self.local_network_root):
             self.show_error("共享根目录无效")
             return
 
         # Step 3: 收集信息传给 presenter/manager
-        workflow_path = get_resource_path(os.path.join("comfyui_assets", "workflows", selected_workflow))
-        prompt_path = get_resource_path(os.path.join("comfyui_assets", "prompts", selected_prompt))
+        workflow_path = self.comfy_assets_dir/ "workflows" / selected_workflow
+        prompt_path = self.comfy_assets_dir/ "prompts" / selected_prompt
+        temp_img_output_dir = self.local_network_root / GlobalConfig.code_project_root_rel_dir/ GlobalConfig.ai_temp_output_rel_dir
 
         # 这里不处理任务，只发送给上层
         self.submit_comfy_task.emit({
             "workflow_path": workflow_path,
             "prompt_path": prompt_path,
-            "local_network_drive_dir": base_dir
+            "local_network_drive_dir": self.local_network_root,
+            "temp_img_output_dir":temp_img_output_dir
         })
+        # comfyui_section.py
+    def update_status(self, text: str):
+        self.progress_label.setText(f"任务进度: {text}")
+
+    def update_progress(self, done: int, total: int):
+        percent = int((done / total) * 100) if total > 0 else 0
+        self.progress_bar.setValue(percent)
+
+    def show_error(self, message: str):
+        QMessageBox.critical(self, "错误", message)
+
+    def show_message(self, message: str):
+        QMessageBox.information(self, "提示", message)
+

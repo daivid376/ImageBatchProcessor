@@ -3,6 +3,7 @@ from PyQt6.QtWidgets import QApplication
 from PyQt6.QtGui import QIcon
 from src.ImageBatchProcessor_model import ImageBatchModel
 from src.ImageBatchProcessor_presenter import ImageBatchPresenter
+from src.comfyui_api.comfyui_presnter import ComfyUIPresenter
 from src.ui.ImageBatchProcessor_view import ImageBatchView
 sys.path.append(os.path.dirname(__file__))
 from src import __version__ 
@@ -27,6 +28,9 @@ if __name__ == "__main__":
     model = ImageBatchModel()
     view = ImageBatchView()
     presenter = ImageBatchPresenter(model, view)
+    comfy_view = view.comfy_section
+
+    comfy_presenter = ComfyUIPresenter(model, comfy_view) 
     # 让 view 主动发出初始状态
     view.emit_initial_signals()
     view.show()
