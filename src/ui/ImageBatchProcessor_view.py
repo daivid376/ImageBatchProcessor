@@ -250,19 +250,26 @@ class ImageBatchView(QMainWindow):
                         widget.setValue(val)
                     elif hasattr(widget, "text"):
                         widget.setText(val)
-        saved_dir = self.output_entry.text().strip()
-        if saved_dir:
-            self.output_folder_selected.emit(saved_dir)
-
+        #！在Main文件里，等UI全都初始化完成後再調用一次 信號
     def closeEvent(self, event):
         self.save_settings()
         super().closeEvent(event)
 
-    def emit_initial_signals(self):
-        saved_dir = self.output_entry.text().strip()
-        if saved_dir:
-            self.output_folder_selected.emit(saved_dir)
     def show_progress_dialog(self, total):
         self.progress_dialog = ProgressDialog(total=total, parent=self)
         self.progress_dialog.show()
-
+        
+   
+    def emit_initial_signals(self):
+         #！在Main文件里，等UI全都初始化完成後再調用一次 信號
+        """🆕 配置加载完成后，手动触发必要的信号"""
+        for widget in self.findChildren(QWidget):
+            if widget.property("persist"):
+                key = widget.objectName()
+                val = self.settings.value(key)
+                
+                if val is not None and isinstance(widget, DropLineEdit):
+                    path = str(val).strip()
+                    if path:  # 只有非空路径才发射信号
+                        print(f"🚀 触发信号: {key} -> {path}")
+                        widget.pathSelectedSignal.emit(path)

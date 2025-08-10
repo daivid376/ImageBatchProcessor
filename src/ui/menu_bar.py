@@ -4,12 +4,13 @@ import os
 import json
 from dataclasses import asdict
 from PyQt6.QtWidgets import (
-    QMenuBar, QMenu, QInputDialog, QMessageBox
+    QMenuBar, QMenu, QInputDialog, QMessageBox,QWidget
 )
 from PyQt6.QtCore import QSettings
 from src import __version__
 from src.config import GlobalConfig, ImageProcessConfig
 from src import get_resource_path
+from src.ui.common_widgets import DropLineEdit
 
 
 class MenuManager:
@@ -89,7 +90,19 @@ class MenuManager:
                         widget.setValue(val)
                     elif hasattr(widget, "setText"):
                         widget.setText(str(val))
-
+            self._emit_loaded_signals()
+    def _emit_loaded_signals(self):
+        """🆕 配置加载完成后，手动触发必要的信号"""
+        for widget in self.findChildren(QWidget):
+            if widget.property("persist"):
+                key = widget.objectName()
+                val = self.settings.value(key)
+                
+                if val is not None and isinstance(widget, DropLineEdit):
+                    path = str(val).strip()
+                    if path:  # 只有非空路径才发射信号
+                        print(f"🚀 触发信号: {key} -> {path}")
+                        widget.pathSelectedSignal.emit(path)
     def delete_preset(self, name):
         self.settings.remove(f"Presets/{name}")
         self.refresh_presets_menu()

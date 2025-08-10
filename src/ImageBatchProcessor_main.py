@@ -27,10 +27,11 @@ if __name__ == "__main__":
         
     model = ImageBatchModel()
     view = ImageBatchView()
-    presenter = ImageBatchPresenter(model, view)
+    main_presenter = ImageBatchPresenter(model, view)
     comfy_view = view.comfy_section
 
     comfy_presenter = ComfyUIPresenter(model, comfy_view) 
+    main_presenter.set_comfy_presenter(comfy_presenter)
     # 让 view 主动发出初始状态
     view.emit_initial_signals()
     view.show()

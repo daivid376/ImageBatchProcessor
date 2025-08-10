@@ -8,7 +8,8 @@ from src.ui.common_widgets import CustomComboBox
 from src.config import GlobalConfig
 from src.ui.common_widgets import DropLineEdit
 class ComfyUISection(QWidget):
-    submit_comfy_task = pyqtSignal(dict) 
+    submit_comfy_task = pyqtSignal(dict)
+    local_network_drive_selected = pyqtSignal(str) 
     def __init__(self):
         super().__init__()
         self.setWindowTitle("ComfyUI 任务管理")
@@ -31,6 +32,7 @@ class ComfyUISection(QWidget):
         self.local_network_drive_input.setProperty("persist", True)
         self.local_network_drive_input.setPlaceholderText("选择本地共享网盘根目录")
         self.local_network_drive_input.pathSelectedSignal.connect(self.update_from_input_dir)
+        self.local_network_drive_input.pathSelectedSignal.connect(self.local_network_drive_selected)
         
         lastPath = self.settings.value("local_network_drive_input", "")
         self.local_network_drive_input.setText(lastPath)

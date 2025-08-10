@@ -26,7 +26,7 @@ class ComfySubmitWorker(QThread):
     finished_ok = pyqtSignal()         # 🔄 保持：向后兼容
     failed = pyqtSignal(str)           # 保持：错误信号
 
-    def __init__(self, client, comfy_model: ComfyModel, tmp_output_dir, wait_timeout=180, wait_interval=2, parent=None):
+    def __init__(self, client, comfy_model: ComfyModel, wait_timeout=180, wait_interval=2, parent=None):
         super().__init__(parent)
         self.client = client
         # 🔄 主要改动：接收ComfyModel而不是原始tasks列表
@@ -34,9 +34,6 @@ class ComfySubmitWorker(QThread):
         self.comfy_model = comfy_model  # 🆕 ComfyUI数据模型
         
         # 🔄 保持原有配置参数
-        self.client_tmp_output_dir = tmp_output_dir
-        self.real_output_dir = None
-        self.tasks_info = None
         self.wait_timeout = wait_timeout
         self.wait_interval = wait_interval
         
@@ -44,16 +41,7 @@ class ComfySubmitWorker(QThread):
         self.ws_thread = None
         self.ws = None
         self.prompt_ids = set()
-
-    def set_output_dir(self, path):
-        """🔄 保持原有方法：设置最终输出目录"""
-        self.real_output_dir = path
-        if not os.path.exists(path):
-            os.makedirs(path, exist_ok=True)
-
-    def set_tasks_info(self, info: dict):
-        """🔄 保持原有方法：设置任务信息"""
-        self.tasks_info = info
+        self.completed_task_ids = set()
 
     def run(self):
         """🔄 重构主运行逻辑，但保持原有功能流程"""
@@ -202,15 +190,24 @@ class ComfySubmitWorker(QThread):
             self._handle_task_complete(pid)
 
     def _handle_task_complete(self, pid: str):
-        """🔄 重构任务完成处理逻辑"""
+        """🔄 重构任务完成处理逻辑 - 修复文件延迟问题"""
+        if pid in self.completed_task_ids:
+            print(f"⚠️ 任务 {pid} 已经处理过，跳过")
+            return
+        self.completed_task_ids.add(pid)
         try:
             # 🔄 保持原有history获取逻辑
             self.status.emit(f"[{pid}] 等待 history 写入...")
+            print("=== ComfyModel 状态检查 ===")
+            print(f"tmp_img_output_dir: {self.comfy_model.tmp_img_output_dir}")
+            print(f"get_tmp_output_dir(): {self.comfy_model.get_tmp_output_dir()}")
+            print(f"get_tmp_output_dir_str(): {self.comfy_model.get_output_dir()}")
             max_wait = 10
             start_time = pyt.time()
             hist = {}
             while pyt.time() - start_time < max_wait:
                 r = requests.get(f"{self.client.base_url}/history/{pid}", timeout=5).json()
+                print('r: ', r)
                 if pid in r and "outputs" in r[pid] and r[pid]["outputs"]:
                     hist = r
                     break
@@ -218,13 +215,17 @@ class ComfySubmitWorker(QThread):
             else:
                 raise TimeoutError(f"history/{pid} 超时未写入")
 
-            # 🔄 保持原有文件处理逻辑
+            # 🆕 增加文件等待逻辑
             outputs = hist[pid]["outputs"]
-            tmp_output_file = self.get_tmp_output_path(outputs)
-            if tmp_output_file and self.real_output_dir:
-                # 🔄 保持原有文件搬运逻辑（这里需要新增文件名生成）
-                output_name = f"comfy_output_{pid}.png"  # 🆕 生成输出文件名
-                self.move_rename_output_file(tmp_output_file, self.real_output_dir, output_name)
+            tmp_output_file = self._wait_for_output_file(outputs, pid)
+            print('tmp_output_file: ', tmp_output_file)
+            real_output_dir = self.comfy_model.get_output_dir()
+            print('real_output_dir1: ', real_output_dir)
+            if tmp_output_file and real_output_dir:
+                print('real_output_dir: ', real_output_dir)
+                # 🔄 保持原有文件搬运逻辑
+                output_name = f"comfy_output_{pid}.png"
+                self.move_rename_output_file(tmp_output_file, real_output_dir, output_name)
 
             # 🆕 发出单个任务完成信号
             self.task_completed.emit(pid)
@@ -234,7 +235,7 @@ class ComfySubmitWorker(QThread):
             if self.comfy_model.is_all_completed():
                 print("🎉 所有任务已完成")
                 self.all_completed.emit()
-                self.finished_ok.emit()  # 🔄 向后兼容
+                self.finished_ok.emit()
                 if self.ws:
                     self.ws.close()
 
@@ -244,12 +245,14 @@ class ComfySubmitWorker(QThread):
             self.status.emit(f"[{pid}] 获取结果或搬运文件失败: {e}")
             print(f"❌ 任务完成处理失败: {pid}, 错误: {e}")
 
-    def get_tmp_output_path(self, outputs_node):
-        """🔄 保持原有临时输出路径获取逻辑，无改动"""
+    def _wait_for_output_file(self, outputs_node, pid: str, max_wait_file: int = 15):
+        """🆕 等待输出文件真正生成到磁盘"""
         if not outputs_node or not isinstance(outputs_node, dict):
             print("[WARN] outputs_node 为空或不是字典")
             return None
 
+        # 先收集所有可能的输出文件路径
+        candidate_files = []
         for node_id, out in outputs_node.items():
             if not isinstance(out, dict):
                 continue
@@ -261,7 +264,104 @@ class ComfySubmitWorker(QThread):
                 if not isinstance(img, dict):
                     continue
                 if img.get("type") == "output" and "filename" in img:
-                    src_file = os.path.join(self.client_tmp_output_dir, img["filename"])
+                    client_tmp_output_dir =self.comfy_model.get_tmp_output_dir()
+                    src_file = os.path.join(client_tmp_output_dir, img["filename"])
+                    candidate_files.append(src_file)
+                    print(f"🔍 候选输出文件: {src_file}")
+
+        if not candidate_files:
+            print("[WARN] 没有找到候选输出文件")
+            return None
+
+        # 🆕 轮询等待文件生成
+        self.status.emit(f"[{pid}] 等待输出文件写入磁盘...")
+        start_time = pyt.time()
+        
+        while pyt.time() - start_time < max_wait_file:
+            for src_file in candidate_files:
+                if os.path.exists(src_file):
+                    # 🆕 文件存在后再等待一小段时间确保写入完成
+                    self.status.emit(f"[{pid}] 发现文件，等待写入完成...")
+                    self.msleep(1000)  # 等待1秒确保文件写入完成
+                    
+                    # 🆕 验证文件是否真的可读且有内容
+                    if self._verify_file_complete(src_file):
+                        print(f"✅ 文件验证成功: {src_file}")
+                        return src_file
+                    else:
+                        print(f"⚠️ 文件未完全写入，继续等待: {src_file}")
+            
+            self.status.emit(f"[{pid}] 等待文件生成... ({int(pyt.time() - start_time)}s)")
+            self.msleep(1000)  # 每秒检查一次
+
+        print(f"[ERROR] 等待输出文件超时: {candidate_files}")
+        return None
+
+    def _verify_file_complete(self, file_path: str) -> bool:
+        """🆕 验证文件是否完全写入"""
+        try:
+            # 检查文件大小是否大于0
+            if os.path.getsize(file_path) == 0:
+                return False
+            
+            # 尝试打开文件读取头部，验证不是损坏的
+            with open(file_path, 'rb') as f:
+                header = f.read(10)  # 读取前10字节
+                if len(header) == 0:
+                    return False
+            
+            # 🆕 对于图片文件，可以进一步验证
+            if file_path.lower().endswith(('.png', '.jpg', '.jpeg')):
+                try:
+                    from PIL import Image
+                    with Image.open(file_path) as img:
+                        img.verify()  # 验证图片完整性
+                    return True
+                except Exception:
+                    return False
+            
+            return True
+        except Exception as e:
+            print(f"文件验证失败: {file_path}, 错误: {e}")
+            return False
+
+    def get_tmp_output_path(self, outputs_node):
+        """🔄 保持原有逻辑，但添加调试信息"""
+        client_tmp_output_dir = self.comfy_model.get_tmp_output_dir()
+        print("🔍 开始查找临时输出文件...")
+        print(f"📁 输出目录: {client_tmp_output_dir}")
+        
+        if not outputs_node or not isinstance(outputs_node, dict):
+            print("[WARN] outputs_node 为空或不是字典")
+            return None
+
+        # 🆕 添加详细的调试输出
+        print(f"📋 outputs_node 内容: {json.dumps(outputs_node, indent=2)}")
+
+        for node_id, out in outputs_node.items():
+            print(f"🔍 检查节点 {node_id}: {type(out)}")
+            if not isinstance(out, dict):
+                continue
+            images = out.get("images")
+            if not images or not isinstance(images, list):
+                print(f"⚠️ 节点 {node_id} 没有有效的 images 列表")
+                continue
+
+            for i, img in enumerate(images):
+                print(f"🖼️ 检查图片 {i}: {img}")
+                if not isinstance(img, dict):
+                    continue
+                if img.get("type") == "output" and "filename" in img:
+                    src_file = os.path.join(client_tmp_output_dir, img["filename"])
+                    print(f"🎯 构造文件路径: {src_file}")
+                    print(f"📁 目录存在: {os.path.exists(client_tmp_output_dir)}")
+                    print(f"📄 文件存在: {os.path.exists(src_file)}")
+                    
+                    # 🆕 列出目录内容进行对比
+                    if os.path.exists(client_tmp_output_dir):
+                        actual_files = os.listdir(client_tmp_output_dir)
+                        print(f"📂 实际目录内容: {actual_files}")
+                    
                     if os.path.exists(src_file):
                         return src_file
                     else:

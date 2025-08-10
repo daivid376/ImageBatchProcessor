@@ -42,17 +42,22 @@ class ImageBatchPresenter:
         self.model = model
         self.view = view
         self.worker = None
+        self.comfy_presenter = None
 
         # 🔄 保持传统图像处理相关的信号连接
         view.files_dropped.connect(self.handle_files)
-        view.output_folder_selected.connect(self.model.set_output_dir)
+        view.output_folder_selected.connect(self.handle_output_folder_selected)
         view.process_requested.connect(self.handle_process)
         view.file_removed.connect(self.handle_remove_file)
         
         # ❌ 移除：ComfyUI相关信号连接
         # view.comfy_section.submit_comfy_task.connect(self.submit)
         # view.comfy_section.submit_comfy_task.connect(self.handle_comfy_remote_process)
-
+    def set_comfy_presenter(self, presenter):
+        self.comfy_presenter = presenter
+    def handle_output_folder_selected(self, folder_path):
+        self.model.set_output_dir(folder_path)
+        self.comfy_presenter.set_output_dir(folder_path)
     def handle_files(self, paths):
         """🔄 保持原有文件处理逻辑"""
         files = self.model.add_files(paths)

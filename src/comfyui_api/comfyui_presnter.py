@@ -6,13 +6,14 @@
 # 3. 🆕 添加详细的任务状态跟踪
 # 4. 🔄 优化错误处理和用户反馈
 
+import os
 from PyQt6.QtCore import QObject, pyqtSlot
 from PyQt6.QtWidgets import QMessageBox
 from .comfy_model import ComfyModel, ComfyTask  # 🆕 引入新的数据模型
 from .workflow_manager import WorkflowManager
 from .submit_worker import ComfySubmitWorker
 from .api_client import ComfyApiClient
-
+from src.config import GlobalConfig
 class ComfyUIPresenter(QObject):
     def __init__(self, main_model, comfy_view):
         super().__init__()
@@ -24,7 +25,14 @@ class ComfyUIPresenter(QObject):
         self.current_worker = None          # 当前运行的Worker
         
         # 🔄 保持原有信号连接，但处理逻辑重构
+        self.view.local_network_drive_selected.connect(self.set_tmp_img_output_dir)
         self.view.submit_comfy_task.connect(self.handle_submit_task)
+        
+    def set_output_dir(self, path):
+        self.comfy_model.set_output_dir(path)
+    def set_tmp_img_output_dir(self, local_network_drive_dir):
+        tmp_img_output_dir = os.path.join(local_network_drive_dir,GlobalConfig.code_project_root_rel_dir, GlobalConfig.ai_temp_output_rel_dir)
+        self.comfy_model.set_tmp_img_output_dir(tmp_img_output_dir)
     
     @pyqtSlot(dict)
     def handle_submit_task(self, task_info: dict):
@@ -99,7 +107,6 @@ class ComfyUIPresenter(QObject):
         self.current_worker = ComfySubmitWorker(
             client=self.client,
             comfy_model=self.comfy_model,  # 🆕 传入ComfyUI专用模型
-            tmp_output_dir=str(task_info["temp_img_output_dir"]),
             wait_timeout=180,
             wait_interval=2
         )

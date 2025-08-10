@@ -210,13 +210,15 @@ class DropLineEdit(QWidget):
         self.line_edit.editingFinished.connect(self._on_edit_finished)
 
     def text(self): return self.line_edit.text()
-    def setText(self, text): self.line_edit.setText(text)
+    def setText(self, text): 
+        self.line_edit.setText(text)
     def setPlaceholderText(self, text): self.line_edit.setPlaceholderText(text)
     def setReadOnly(self, readonly): self.line_edit.setReadOnly(readonly)
     def clear(self): self.line_edit.clear()
     def setFocus(self): self.line_edit.setFocus()
     def _on_edit_finished(self):
         path = self.text().strip()
+        print('內部更新了uipath: ', path)
         self.pathSelectedSignal.emit(path)
     def dragEnterEvent(self, event):
         if event.mimeData().hasUrls():

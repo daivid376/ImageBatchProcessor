@@ -29,6 +29,8 @@ class ComfyModel:
         self.current_workflow_path: Optional[Path] = None
         self.current_prompt_path: Optional[Path] = None
         self.local_network_root: Optional[Path] = None
+        self.output_dir = None
+        self.tmp_img_output_dir = None
         self.completed_count = 0
         
     def clear_tasks(self):
@@ -64,9 +66,17 @@ class ComfyModel:
     def is_all_completed(self) -> bool:
         """检查是否所有任务都已完成"""
         return self.completed_count >= len(self.tasks)
-        
+    def set_output_dir(self, output_dir: Path):
+        self.output_dir = output_dir
+    def get_output_dir(self):
+        return self.output_dir if self.output_dir else None
+    def set_tmp_img_output_dir(self, path):
+        self.tmp_img_output_dir = path
+    def get_tmp_output_dir(self):
+        return self.tmp_img_output_dir if self.tmp_img_output_dir else None
     def set_workflow_config(self, workflow_path: Path, prompt_path: Path, network_root: Path):
         """设置工作流配置"""
         self.current_workflow_path = workflow_path
         self.current_prompt_path = prompt_path
         self.local_network_root = network_root
+        
