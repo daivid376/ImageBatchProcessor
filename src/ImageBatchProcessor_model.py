@@ -1,4 +1,5 @@
 import os
+from pathlib import Path
 from src.ImageBatchProcessor_utils import process_image_v5
 from src.config import ImageProcessConfig
 
@@ -23,6 +24,8 @@ class ImageBatchModel:
                 valid_files.append(f)
         added_files = []
         for f in valid_files:
+            # 将字符串转变成path类型
+            f = Path(f)
             if f not in self.files:
                 self.files.append(f)
                 added_files.append(f)

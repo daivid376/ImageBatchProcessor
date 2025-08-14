@@ -5,7 +5,7 @@
 from typing import List, Dict, Optional
 from dataclasses import dataclass
 from pathlib import Path
-
+from typing import Optional
 @dataclass
 class ComfyTask:
     """
@@ -17,7 +17,10 @@ class ComfyTask:
     payload: Dict
     prompt_id: Optional[str] = None
     status: str = "pending"  # pending, submitted, completed, failed
-
+    @property
+    def orig_filename(self):
+        """获取图片文件名"""
+        return Path(self.image_path).name
 class ComfyModel:
     """
     🆕 新增：ComfyUI模块的专用数据模型
@@ -33,11 +36,18 @@ class ComfyModel:
         self.tmp_img_output_dir = None
         self.completed_count = 0
         
+        self.prompt_id_to_task: Dict[str, ComfyTask] = {} 
     def clear_tasks(self):
         """清空所有任务"""
         self.tasks.clear()
         self.completed_count = 0
-        
+        self.prompt_id_to_task.clear()
+    def register_task_prompt_id(self,task:ComfyTask,prompt_id:str):
+        task.prompt_id = prompt_id
+        self.prompt_id_to_task[prompt_id] = task
+    def get_task_by_prompt_id(self, prompt_id: str) -> Optional[ComfyTask]:
+        return self.prompt_id_to_task[prompt_id]
+
     def add_task(self, task: ComfyTask):
         """添加新任务"""
         self.tasks.append(task)
@@ -55,7 +65,9 @@ class ComfyModel:
         for task in self.tasks:
             if task.prompt_id == prompt_id:
                 task.status = status
+                print('task.status: ', task.status)
                 if status == "completed":
+                    print('status: ', status)
                     self.completed_count += 1
                 break
                 
@@ -74,6 +86,19 @@ class ComfyModel:
         self.tmp_img_output_dir = path
     def get_tmp_output_dir(self):
         return self.tmp_img_output_dir if self.tmp_img_output_dir else None
+    def get_file_orig_name(self, file_path: str) -> str:
+        orig_file_path = self.tasks['image']
+        print('orig_file_path: ', orig_file_path)
+        file_name = None
+        if isinstance(orig_file_path, str):
+            orig_file_path = Path(orig_file_path)
+        file_name = Path(orig_file_path).name
+    def get_task_by_prompt_id(self, prompt_id: str) -> Optional[ComfyTask]:
+        """根据prompt_id获取任务"""
+        for task in self.tasks:
+            if task.prompt_id == prompt_id:
+                return task
+        return None
     def set_workflow_config(self, workflow_path: Path, prompt_path: Path, network_root: Path):
         """设置工作流配置"""
         self.current_workflow_path = workflow_path

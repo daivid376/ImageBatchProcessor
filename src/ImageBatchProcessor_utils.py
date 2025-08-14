@@ -5,11 +5,11 @@ from PIL import Image
 from types import SimpleNamespace
 from dataclasses import asdict
 from src.config import ImageProcessConfig
-
+from pathlib import Path
 # =========================
 # 图像处理函数 (结构优化版)
 # =========================
-def process_image_v5(image_path: str, config: ImageProcessConfig) -> Image.Image:
+def process_image_v5(image_path: Path, config: ImageProcessConfig) -> Image.Image:
     """
     根据配置参数对图像进行批量处理。
     动态解析 dataclass 配置，避免手动解包参数。

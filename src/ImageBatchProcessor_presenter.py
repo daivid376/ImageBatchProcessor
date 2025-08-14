@@ -7,6 +7,7 @@
 # 4. 🔄 简化：构造函数，移除重复的信号连接
 # 5. ✅ 保持：所有传统图像处理功能
 
+from pathlib import Path
 from PyQt6.QtCore import QThread, pyqtSignal
 from PyQt6.QtWidgets import QMessageBox,QApplication
 from PyQt6.QtCore import QTimer
@@ -62,6 +63,8 @@ class ImageBatchPresenter:
         """🔄 保持原有文件处理逻辑"""
         files = self.model.add_files(paths)
         for f in files:
+            if isinstance(f, Path):
+                f = f.as_posix()
             self.view.add_file_item(f)
 
     def handle_remove_file(self, filepath):

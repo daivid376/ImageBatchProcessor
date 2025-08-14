@@ -8,8 +8,31 @@ from src.ui.ImageBatchProcessor_view import ImageBatchView
 sys.path.append(os.path.dirname(__file__))
 from src import __version__ 
 from src import get_resource_path
+import winreg
+def add_proxy_override(new_entry: str):
+    reg_path = r"Software\Microsoft\Windows\CurrentVersion\Internet Settings"
+    reg_value = "ProxyOverride"
 
+    try:
+        key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, reg_path, 0, winreg.KEY_READ)
+        current_value, _ = winreg.QueryValueEx(key, reg_value)
+        winreg.CloseKey(key)
+    except FileNotFoundError:
+        current_value = ""
+
+    if current_value and new_entry.lower() in current_value.lower():
+        print(f"已存在: {new_entry}，无需添加")
+        return
+
+    updated_value = (current_value + ";" + new_entry) if current_value else new_entry
+
+    key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, reg_path, 0, winreg.KEY_SET_VALUE)
+    winreg.SetValueEx(key, reg_value, 0, winreg.REG_SZ, updated_value)
+    winreg.CloseKey(key)
+    print(f"已追加: {new_entry}")
+    
 if __name__ == "__main__":
+    add_proxy_override("100.83.*")
     app = QApplication(sys.argv)
     app.setApplicationName(f"ImageBatchProcessor v{__version__}")
     base_dir = getattr(sys, '_MEIPASS', os.path.abspath(os.path.dirname(__file__)))

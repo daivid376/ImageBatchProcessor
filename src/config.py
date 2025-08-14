@@ -14,7 +14,7 @@ class GlobalConfig:
     comfy_assets_rel_dir = "comfyui_assets"
     ai_temp_input_rel_dir = "AI_process_temp/comfy_api_input"
     ai_temp_output_rel_dir = "AI_process_temp/comfy_api_output"
-    
+
 
 @dataclass
 class ImageProcessConfig:

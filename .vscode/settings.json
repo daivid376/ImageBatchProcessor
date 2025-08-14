@@ -4,5 +4,6 @@
     },
     "code-runner.runInTerminal": true,
     "code-runner.fileDirectoryAsCwd": false,
-    "code-runner.cwd": "${workspaceFolder}"
+    "code-runner.cwd": "${workspaceFolder}",
+    "python.languageServer": "None"
 }
