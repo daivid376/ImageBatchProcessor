@@ -91,9 +91,9 @@ class ComfySubmitWorker(QThread):
         职责：处理单个任务的文件等待和提交逻辑
         """
         # 🔄 保持原有文件等待逻辑
-        if task.rel_input:
-            self.status.emit(f"等待文件同步到服务器: {task.rel_input}")
-            self._wait_input(task.rel_input)
+        if task.rel_tmp_input_path:
+            self.status.emit(f"等待文件同步到服务器: {task.rel_tmp_input_path}")
+            self._wait_input(task.rel_tmp_input_path)
 
         # 🔄 保持原有提交逻辑
         self.status.emit("提交任务到 /prompt ...")
@@ -177,6 +177,33 @@ class ComfySubmitWorker(QThread):
         self.status.emit("WebSocket连接超时")
         return False
 
+  
+    def _get_task_history(self, pid: str):
+        """🆕 抽象化获取任务历史记录，支持Mock和真实模式"""
+        if self.is_mock_mode and hasattr(self.client, 'get_history'):
+            # Mock模式：直接从Mock客户端获取history
+            self.status.emit(f"[MOCK] 获取任务历史记录...")
+            hist = self.client.get_history(pid)
+            print(f'[MOCK] history: {hist}')
+            if not hist:
+                raise TimeoutError(f"Mock history/{pid} 未找到")
+            return hist
+        else:
+            # 真实模式：保持原有的轮询等待逻辑
+            max_wait = 10
+            start_time = pyt.time()
+            hist = {}
+            while pyt.time() - start_time < max_wait:
+                r = requests.get(f"{self.client.base_url}/history/{pid}", timeout=5).json()
+                print('r: ', r)
+                if pid in r and "outputs" in r[pid] and r[pid]["outputs"]:
+                    hist = r
+                    break
+                self.msleep(500)
+            else:
+                raise TimeoutError(f"history/{pid} 超时未写入")
+            return hist
+
     def _on_ws_message(self, ws, message):
         """🔄 保持原有WebSocket消息处理逻辑"""
         try:
@@ -229,24 +256,15 @@ class ComfySubmitWorker(QThread):
             return
         self.completed_task_ids.add(pid)
         try:
-            # 🔄 保持原有history获取逻辑
+            # 🔄 保持原有history获取逻辑，现在抽象为独立方法
             self.status.emit(f"[{pid}] 等待 history 写入...")
             print("=== ComfyModel 状态检查 ===")
             print(f"tmp_img_output_dir: {self.comfy_model.tmp_img_output_dir}")
             print(f"get_tmp_output_dir(): {self.comfy_model.get_tmp_output_dir()}")
             print(f"get_tmp_output_dir_str(): {self.comfy_model.get_output_dir()}")
-            max_wait = 10
-            start_time = pyt.time()
-            hist = {}
-            while pyt.time() - start_time < max_wait:
-                r = requests.get(f"{self.client.base_url}/history/{pid}", timeout=5).json()
-                print('r: ', r)
-                if pid in r and "outputs" in r[pid] and r[pid]["outputs"]:
-                    hist = r
-                    break
-                self.msleep(500)
-            else:
-                raise TimeoutError(f"history/{pid} 超时未写入")
+            
+            # 🆕 调用抽象化的history获取方法（真实模式保持原有等待逻辑）
+            hist = self._get_task_history(pid)
 
             # 🆕 增加文件等待逻辑
             outputs = hist[pid]["outputs"]

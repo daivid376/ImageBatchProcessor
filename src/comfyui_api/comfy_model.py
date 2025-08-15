@@ -13,7 +13,7 @@ class ComfyTask:
     用于跟踪每个任务的状态和相关信息
     """
     image_path: str
-    rel_input: str
+    rel_tmp_input_path: str #拷贝到comfy_api_input文件夹之后的文件
     payload: Dict
     prompt_id: Optional[str] = None
     status: str = "pending"  # pending, submitted, completed, failed
