@@ -1,9 +1,18 @@
 {
-    "code-runner.executorMap": {
-        "python": "cmd /c run.bat"
+    "claudeCodeChat.permissions.yoloMode": false,
+    "python.defaultInterpreterPath": "C:\\venvs\\ImageBatchProcessor312\\Scripts\\python.exe",
+    "python.terminal.activateEnvironment": true,
+    "terminal.integrated.profiles.windows": {
+        "PowerShell (ImageBatchProcessor312 venv)": {
+            "path": "powershell.exe",
+            "args": [
+                "-NoExit",
+                "-Command",
+                "& 'C:/venvs/ImageBatchProcessor312/Scripts/Activate.ps1'"
+            ]
+        }
     },
-    "code-runner.runInTerminal": true,
-    "code-runner.fileDirectoryAsCwd": false,
-    "code-runner.cwd": "${workspaceFolder}",
-    "python.languageServer": "None"
+    "terminal.integrated.defaultProfile.windows": "PowerShell (ImageBatchProcessor312 venv)",
+    "python-envs.defaultEnvManager": "ms-python.python:system",
+    "python-envs.pythonProjects": []
 }

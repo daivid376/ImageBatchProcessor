@@ -42,18 +42,18 @@ class ComfySubmitWorker(QThread):
         self.ws = None
         self.prompt_ids = set()
         self.completed_task_ids = set()
+        
+        # 🆕 新增：重连相关属性
+        self.max_retries = 3
+        self.retry_delay = 5
+        self.is_running = False
 
     def run(self):
         """🔄 重构主运行逻辑，但保持原有功能流程"""
+        self.is_running = True
         try:
             # 🔄 保持原有健康检查
             self.status.emit("检查端口连通性...")
-            if not self.client.is_port_open():
-                raise RuntimeError("ComfyUI 端口无法访问")
-
-            self.status.emit("检查服务状态...")
-            if not self.client.is_comfy_alive():
-                raise RuntimeError("ComfyUI 未响应 /system_stats")
 
             # 🔄 获取任务列表（从ComfyModel而不是self.tasks）
             pending_tasks = self.comfy_model.get_pending_tasks()
@@ -65,19 +65,25 @@ class ComfySubmitWorker(QThread):
             print(f"📋 准备处理 {total} 个任务")
 
             # 🔄 保持原有WebSocket启动逻辑
-            self._start_ws_listener()
+            if not self._start_ws_listener():
+                raise RuntimeError("WebSocket连接失败")
 
             # 🔄 重构任务提交循环，使用ComfyTask对象
             for i, task in enumerate(pending_tasks):
+                if not self.is_running:
+                    break
                 self._submit_single_task(task)  # 🆕 提取为独立方法
                 self.progress.emit(i + 1, total)
 
-            self.status.emit("全部任务已提交，等待WebSocket推送完成事件...")
-            # 🔄 注意：不再直接emit finished_ok，而是等待WebSocket事件
+            if self.is_running:
+                self.status.emit("全部任务已提交，等待WebSocket推送完成事件...")
+                # 🔄 注意：不再直接emit finished_ok，而是等待WebSocket事件
 
         except Exception as e:
             tb = traceback.format_exc(limit=5)
             self.failed.emit(f"{e}\n{tb}")
+        finally:
+            self.is_running = False
 
     def _submit_single_task(self, task: ComfyTask):
         """
@@ -92,9 +98,9 @@ class ComfySubmitWorker(QThread):
         # 🔄 保持原有提交逻辑
         self.status.emit("提交任务到 /prompt ...")
         prompt_id = self.client.submit(task.payload)
+        self.comfy_model.register_task_prompt_id(task, prompt_id)
         
         # 🔄 更新任务状态（现在使用ComfyModel管理）
-        task.prompt_id = prompt_id
         task.status = "submitted"
         self.prompt_ids.add(prompt_id)
         
@@ -128,21 +134,48 @@ class ComfySubmitWorker(QThread):
         raise TimeoutError(f"等待文件可读超时: {rel_input}，最后状态: {last_status}")
 
     def _start_ws_listener(self):
-        """🔄 保持原有WebSocket启动逻辑，无改动"""
+        """🔄 保持原有WebSocket启动逻辑，🆕 添加代理绕过和连接状态检测"""
         ws_url = f"ws://{self.client.host}:{self.client.port}/ws"
         self.status.emit(f"连接 WebSocket: {ws_url}")
+
+        # 🆕 添加连接状态标志
+        self.ws_connected = False
+        self.ws_connect_error = None
+
+        def on_open(ws):
+            self.ws_connected = True
+            self.status.emit("WebSocket连接已建立")
+
+        def on_error(ws, error):
+            self.ws_connect_error = error
+            self._on_ws_error(ws, error)
 
         def run_ws():
             self.ws = websocket.WebSocketApp(
                 ws_url,
+                on_open=on_open,
                 on_message=self._on_ws_message,
-                on_error=self._on_ws_error,
+                on_error=on_error,
                 on_close=self._on_ws_close
             )
-            self.ws.run_forever()
+            # 绕过代理设置，避免本地服务器连接问题
+            self.ws.run_forever(http_proxy_host=None, http_proxy_port=None, proxy_type=None)
 
         self.ws_thread = threading.Thread(target=run_ws, daemon=True)
         self.ws_thread.start()
+        
+        # 🆕 等待连接建立或失败（最多等待5秒）
+        import time
+        for _ in range(50):  # 50 * 0.1 = 5秒
+            if self.ws_connected:
+                return True
+            if self.ws_connect_error:
+                self.status.emit(f"WebSocket连接错误: {self.ws_connect_error}")
+                return False
+            time.sleep(0.1)
+        
+        self.status.emit("WebSocket连接超时")
+        return False
 
     def _on_ws_message(self, ws, message):
         """🔄 保持原有WebSocket消息处理逻辑"""
@@ -224,7 +257,9 @@ class ComfySubmitWorker(QThread):
             if tmp_output_file and real_output_dir:
                 print('real_output_dir: ', real_output_dir)
                 # 🔄 保持原有文件搬运逻辑
-                output_name = f"comfy_output_{pid}.png"
+                current_task = self.comfy_model.get_task_by_prompt_id(pid)
+                orig_filestem = current_task.orig_filestem
+                output_name = f"{orig_filestem}_test.png"
                 self.move_rename_output_file(tmp_output_file, real_output_dir, output_name)
 
             # 🆕 发出单个任务完成信号

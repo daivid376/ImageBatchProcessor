@@ -21,6 +21,9 @@ class ComfyTask:
     def orig_filename(self):
         """获取图片文件名"""
         return Path(self.image_path).name
+    @property
+    def orig_filestem(self):
+        return Path(self.image_path).stem
 class ComfyModel:
     """
     🆕 新增：ComfyUI模块的专用数据模型
@@ -87,18 +90,8 @@ class ComfyModel:
     def get_tmp_output_dir(self):
         return self.tmp_img_output_dir if self.tmp_img_output_dir else None
     def get_file_orig_name(self, file_path: str) -> str:
-        orig_file_path = self.tasks['image']
-        print('orig_file_path: ', orig_file_path)
-        file_name = None
-        if isinstance(orig_file_path, str):
-            orig_file_path = Path(orig_file_path)
-        file_name = Path(orig_file_path).name
-    def get_task_by_prompt_id(self, prompt_id: str) -> Optional[ComfyTask]:
-        """根据prompt_id获取任务"""
-        for task in self.tasks:
-            if task.prompt_id == prompt_id:
-                return task
-        return None
+        """获取文件原始名称（已弃用，建议使用ComfyTask.orig_filename属性）"""
+        return Path(file_path).name
     def set_workflow_config(self, workflow_path: Path, prompt_path: Path, network_root: Path):
         """设置工作流配置"""
         self.current_workflow_path = workflow_path

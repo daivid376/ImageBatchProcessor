@@ -14,6 +14,8 @@ class ComfyApiClient:
         self.port = port
         self.base_url = f"http://{host}:{port}"
         self.session = requests.Session()
+        # 绕过代理设置，避免本地服务器连接问题
+        self.session.proxies = {'http': None, 'https': None}
 
     def is_port_open(self, timeout: float = 2.0) -> bool:
         """测试端口是否可访问"""

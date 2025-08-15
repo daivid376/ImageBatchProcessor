@@ -1,4 +1,4 @@
-import sys,os
+import sys,os  # noqa: E401
 from PyQt6.QtWidgets import QApplication
 from PyQt6.QtGui import QIcon
 from src.ImageBatchProcessor_model import ImageBatchModel
