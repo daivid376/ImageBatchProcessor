@@ -50,10 +50,7 @@ class ImageBatchPresenter:
         view.output_folder_selected.connect(self.handle_output_folder_selected)
         view.process_requested.connect(self.handle_process)
         view.file_removed.connect(self.handle_remove_file)
-        
-        # ❌ 移除：ComfyUI相关信号连接
-        # view.comfy_section.submit_comfy_task.connect(self.submit)
-        # view.comfy_section.submit_comfy_task.connect(self.handle_comfy_remote_process)
+ 
     def set_comfy_presenter(self, presenter):
         self.comfy_presenter = presenter
     def handle_output_folder_selected(self, folder_path):

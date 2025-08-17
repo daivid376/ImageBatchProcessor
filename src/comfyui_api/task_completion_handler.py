@@ -1,11 +1,12 @@
-# src/comfyui_api/completion_handler.py
+# src/comfyui_api/task_completion_handler.py
 # 🎯 轻量级任务完成处理器 - 单一职责，简洁设计
 
 import os
+import re
 import shutil
 import time
 from typing import Dict, Optional
-from .comfy_model import ComfyModel
+from pathlib import Path
 
 
 class TaskCompletionHandler:
@@ -19,14 +20,22 @@ class TaskCompletionHandler:
     def __init__(self, file_wait_timeout: int = 15):
         self.file_wait_timeout = file_wait_timeout  # 文件等待超时（秒）
     
-    def handle_completion(self, comfy_model: ComfyModel, prompt_id: str, history_data: Dict) -> Optional[str]:
+    def handle_completion(self, 
+                         prompt_id: str,
+                         history_data: Dict,
+                         temp_output_dir: str,
+                         final_output_dir: str,
+                         original_filename_stem: str,
+                         prompt_filename: str) -> Optional[str]:
         """
         处理任务完成，返回最终输出文件路径
         
         Args:
-            comfy_model: ComfyUI数据模型（实时传入，保证数据最新）
             prompt_id: 任务ID
             history_data: ComfyUI历史数据
+            temp_output_dir: 临时输出目录
+            final_output_dir: 最终输出目录
+            original_filename_stem: 原始文件名（不含扩展名）
             
         Returns:
             str: 最终输出文件路径，失败返回None
@@ -39,22 +48,27 @@ class TaskCompletionHandler:
                 return None
             
             # 步骤2：等待并获取临时文件
-            tmp_file = self._wait_for_temp_file(comfy_model, outputs)
+            tmp_file = self._wait_for_temp_file(temp_output_dir, outputs)
             if not tmp_file:
                 print(f"[ERROR] 任务 {prompt_id} 临时文件未生成")
                 return None
             
             # 步骤3：移动到最终位置
-            final_path = self._move_to_final_location(comfy_model, prompt_id, tmp_file)
+            final_path = self._move_to_final_location(
+                tmp_file, 
+                final_output_dir, 
+                original_filename_stem,
+                prompt_filename
+            )
             return final_path
             
         except Exception as e:
             print(f"[ERROR] 处理任务 {prompt_id} 完成失败: {e}")
             return None
     
-    def _wait_for_temp_file(self, comfy_model: ComfyModel, outputs: Dict) -> Optional[str]:
+    def _wait_for_temp_file(self, temp_output_dir: str, outputs: Dict) -> Optional[str]:
         """等待临时文件生成并验证完整性"""
-        candidates = self._extract_candidate_files(comfy_model, outputs)
+        candidates = self._extract_candidate_files(temp_output_dir, outputs)
         if not candidates:
             return None
         
@@ -64,14 +78,13 @@ class TaskCompletionHandler:
             for file_path in candidates:
                 if self._is_file_ready(file_path):
                     return file_path
-            time.sleep(2)
+            time.sleep(0.5)
         
         return None
     
-    def _extract_candidate_files(self, comfy_model: ComfyModel, outputs: Dict) -> list:
+    def _extract_candidate_files(self, temp_output_dir: str, outputs: Dict) -> list:
         """从outputs中提取候选文件路径"""
-        tmp_dir = comfy_model.get_tmp_output_dir()  # 🎯 实时获取最新路径
-        if not tmp_dir:
+        if not temp_output_dir:
             return []
         
         files = []
@@ -83,7 +96,7 @@ class TaskCompletionHandler:
                         img.get("type") == "output" and 
                         "filename" in img):
                         
-                        file_path = os.path.join(tmp_dir, img["filename"])
+                        file_path = os.path.join(temp_output_dir, img["filename"])
                         files.append(file_path)
         
         return files
@@ -102,18 +115,24 @@ class TaskCompletionHandler:
         except Exception:
             return False
     
-    def _move_to_final_location(self, comfy_model: ComfyModel, prompt_id: str, tmp_file: str) -> str:
+    def _move_to_final_location(self, 
+                                tmp_file: str, 
+                                output_dir: str, 
+                                original_filename_stem:str,
+                                prompt_filename:str) -> str:
         """移动文件到最终位置"""
-        output_dir = comfy_model.get_output_dir()  # 🎯 实时获取最新输出目录
         if not output_dir:
             raise ValueError("输出目录未设置")
         
-        task = comfy_model.get_task_by_prompt_id(prompt_id)  # 🎯 实时获取最新任务信息
-        if not task:
-            raise ValueError(f"任务不存在: {prompt_id}")
-        
         # 生成最终文件名
-        final_name = f"{task.orig_filestem}_processed.png"
+        tags = re.findall(r"\[(.*?)\]", prompt_filename)
+        if not tags:
+            # 没有 [] → 保持原始文件名
+            final_name = f"{original_filename_stem}.png"
+        else:
+            # 多个 tag → 拼接
+            prompt_tag_str = tags[0]
+            final_name = f"{original_filename_stem}_{prompt_tag_str}.png"
         final_path = os.path.join(output_dir, final_name)
         
         # 执行移动
@@ -121,3 +140,4 @@ class TaskCompletionHandler:
         shutil.move(tmp_file, final_path)
         
         return final_path
+    

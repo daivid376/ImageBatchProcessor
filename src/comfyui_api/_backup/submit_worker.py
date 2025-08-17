@@ -247,7 +247,43 @@ class ComfySubmitWorker(QThread):
         if value >= maxv:
             print(f'🎯 任务进度完成: {pid}')
             self._handle_task_complete(pid)
-
+    def _get_task_history(self, prompt_id: str, max_wait: int = 10) -> dict:
+        """
+        获取任务历史记录（等待服务器写入）
+        
+        Args:
+            prompt_id: 任务ID
+            max_wait: 最大等待时间（秒）
+        
+        Returns:
+            包含输出信息的历史记录
+        """
+        import time
+        start_time = time.time()
+        
+        while time.time() - start_time < max_wait:
+            try:
+                # Mock 模式直接返回
+                if self.client.is_mock:
+                    return self.client.get_history(prompt_id)
+                
+                # 真实模式从 API 获取
+                r = self.client.session.get(
+                    f"{self.client.base_url}/history/{prompt_id}", 
+                    timeout=5
+                )
+                data = r.json()
+                
+                # 检查是否有有效输出
+                if prompt_id in data and "outputs" in data[prompt_id] and data[prompt_id]["outputs"]:
+                    return data
+                    
+            except Exception as e:
+                print(f"获取 history 失败: {e}")
+            
+            time.sleep(0.1)
+    
+        raise TimeoutError(f"获取 history/{prompt_id} 超时（{max_wait}秒）")
     def _handle_task_complete(self, pid: str):
         """🔄 重构任务完成处理逻辑 - 修复文件延迟问题"""
         if pid in self.completed_task_ids:

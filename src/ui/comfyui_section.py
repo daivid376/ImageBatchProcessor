@@ -88,7 +88,7 @@ class ComfyUISection(QWidget):
         progress_layout = QHBoxLayout()
 
         # 进度文本
-        self.progress_label = QLabel("任务进度:", self)
+        self.progress_label = QLabel("总任务:", self)
 
         # 进度条
         self.progress_bar = QProgressBar(self)
@@ -101,7 +101,18 @@ class ComfyUISection(QWidget):
 
         # 添加行布局到主布局
         layout.addLayout(progress_layout)
-
+        
+        progress_task_layout = QHBoxLayout()
+        self.current_task_label = QLabel("子任务:", self)
+        self.current_task_progress = QProgressBar(self)
+        self.current_task_progress.setRange(0, 100)
+        self.current_task_progress.setTextVisible(True)
+        progress_task_layout.addWidget(self.current_task_label)
+        progress_task_layout.addWidget(self.current_task_progress)
+        self.current_task_label.hide()
+        self.current_task_progress.hide()
+        layout.addLayout(progress_task_layout)
+        
         self.setLayout(layout)
         
         #开始时需要调用函数区
@@ -122,7 +133,6 @@ class ComfyUISection(QWidget):
         workflows_dir = self.comfy_assets_dir/ "workflows"
         self.workflow_select.clear()
         if not workflows_dir.is_dir():
-            print('add kong')
             self.workflow_select.addItem("<空>")
             return
         else:
@@ -175,14 +185,12 @@ class ComfyUISection(QWidget):
         # Step 3: 收集信息传给 presenter/manager
         workflow_path = self.comfy_assets_dir/ "workflows" / selected_workflow
         prompt_path = self.comfy_assets_dir/ "prompts" / selected_prompt
-        temp_img_output_dir = self.local_network_root / GlobalConfig.code_project_root_rel_dir/ GlobalConfig.ai_temp_output_rel_dir
 
         # 这里不处理任务，只发送给上层
         self.submit_comfy_task.emit({
             "workflow_path": workflow_path,
             "prompt_path": prompt_path,
             "local_network_drive_dir": self.local_network_root,
-            "temp_img_output_dir":temp_img_output_dir
         })
         # comfyui_section.py
     def update_status(self, text: str):

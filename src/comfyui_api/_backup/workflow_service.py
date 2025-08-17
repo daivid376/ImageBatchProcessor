@@ -177,9 +177,7 @@ class WorkflowService(QObject):
             shutil.copy2(p, local_abs)
             
             rel_dir_name = Path(local_input_dir).name
-            print('rel_dir_name: ', rel_dir_name)
             rel_input = f"{rel_dir_name}/{out_name}"
-            print('rel_input: ', rel_input)
             
             # 补丁工作流
             wf = copy.deepcopy(workflow)
