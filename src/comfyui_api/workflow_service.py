@@ -8,7 +8,7 @@ from typing import Dict, List
 from PyQt6.QtCore import QObject, pyqtSignal
 
 from .comfy_model import ComfyModel, ComfyTask
-from .workflow_manager import WorkflowManager
+# 移除WorkflowManager依赖，直接集成其功能
 from .submit_worker import ComfySubmitWorker
 from .api_client import ComfyApiClient
 from src.config import GlobalConfig
@@ -54,6 +54,7 @@ class WorkflowService(QObject):
             GlobalConfig.code_project_root_rel_dir, 
             GlobalConfig.ai_temp_output_rel_dir
         )
+        print(f"🔍 设置tmp_img_output_dir: {tmp_img_output_dir}")
         self.comfy_model.set_tmp_img_output_dir(tmp_img_output_dir)
     
     def submit_tasks(self, main_model, task_info: Dict) -> bool:
@@ -119,21 +120,20 @@ class WorkflowService(QObject):
         )
     
     def _create_tasks(self, main_model, task_info: Dict) -> List[ComfyTask]:
-        """创建ComfyUI任务列表"""
+        """创建ComfyUI任务列表 - 直接集成WorkflowManager功能"""
         try:
             self.comfy_model.clear_tasks()
             
-            # 使用WorkflowManager创建原始任务
-            manager = WorkflowManager(main_model, task_info)
-            raw_tasks = manager.create_comfy_tasks()
+            # 直接在此处理工作流，无需额外的Manager类
+            raw_tasks = self._process_workflow(main_model, task_info)
             
             # 转换为ComfyTask对象
             tasks = []
             for raw_task in raw_tasks:
                 comfy_task = ComfyTask(
                     image_path=raw_task["image"],
-                    rel_input=raw_task["rel_input"],
-                    payload=raw_task["payload"]
+                    rel_tmp_input_path=raw_task["rel_input"],
+                    payload=raw_task["payload"],
                 )
                 self.comfy_model.add_task(comfy_task)
                 tasks.append(comfy_task)
@@ -144,6 +144,67 @@ class WorkflowService(QObject):
         except Exception as e:
             self.error_occurred.emit(f"创建任务失败: {str(e)}")
             return []
+    
+    def _process_workflow(self, main_model, task_info: Dict) -> List[Dict]:
+        """处理工作流 - 从WorkflowManager移植的核心功能"""
+        import json
+        import copy
+        import shutil
+        from pathlib import Path
+        from datetime import datetime
+        
+        # 加载工作流和提示词
+        with open(task_info["workflow_path"], "r", encoding="utf-8") as f:
+            workflow = json.load(f)
+        with open(task_info["prompt_path"], "r", encoding="utf-8") as f:
+            prompt = f.read().strip()
+        
+        # 计算目录
+        local_input_dir = os.path.join(
+            task_info["local_network_drive_dir"],
+            GlobalConfig.code_project_root_rel_dir, 
+            GlobalConfig.ai_temp_input_rel_dir
+        )
+        os.makedirs(local_input_dir, exist_ok=True)
+        
+        tasks = []
+        for img_path in main_model.files:
+            # 暂存图片
+            p = Path(img_path)
+            stamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
+            out_name = f"{stamp}_{p.name}"
+            local_abs = os.path.join(local_input_dir, out_name)
+            shutil.copy2(p, local_abs)
+            
+            rel_dir_name = Path(local_input_dir).name
+            print('rel_dir_name: ', rel_dir_name)
+            rel_input = f"{rel_dir_name}/{out_name}"
+            print('rel_input: ', rel_input)
+            
+            # 补丁工作流
+            wf = copy.deepcopy(workflow)
+            for _, node in wf.items():
+                if isinstance(node, dict) and "class_type" in node:
+                    ctype = node.get("class_type")
+                    inputs = node.setdefault("inputs", {})
+                    
+                    if ctype in ("LoadImage", "LoadImageFromPath"):
+                        inputs["image"] = rel_input
+                    elif ctype in ("CLIPTextEncode", "CLIPTextEncodeSDXL", "CLIPTextEncodeWAS"):
+                        if "text" in inputs and prompt:
+                            inputs["text"] = prompt
+                    elif ctype == "SaveImage":
+                        prefix = inputs.get("filename_prefix", "")
+                        base_prefix = os.path.basename(prefix) if prefix else "result"
+                        inputs["filename_prefix"] = f"comfy_api_output/{base_prefix}"
+            
+            tasks.append({
+                "image": img_path,
+                "rel_input": rel_input,
+                "payload": {"prompt": wf}
+            })
+        
+        return tasks
     
     def _start_submission_process(self, tasks: List[ComfyTask]) -> bool:
         """启动任务提交流程"""

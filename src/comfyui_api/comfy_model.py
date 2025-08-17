@@ -17,6 +17,7 @@ class ComfyTask:
     payload: Dict
     prompt_id: Optional[str] = None
     status: str = "pending"  # pending, submitted, completed, failed
+    prompt_file_name: Optional[str] = None
     @property
     def orig_filename(self):
         """获取图片文件名"""
@@ -30,6 +31,7 @@ class ComfyModel:
     职责：管理ComfyUI任务列表、工作流配置等ComfyUI专用数据
     与主应用的ImageBatchModel分离，避免职责混乱
     """
+    
     def __init__(self):
         self.tasks: List[ComfyTask] = []
         self.current_workflow_path: Optional[Path] = None

@@ -8,8 +8,10 @@
 
 from PyQt6.QtCore import QObject, pyqtSlot
 from PyQt6.QtWidgets import QMessageBox
+
+from src.comfyui_api.api_client import ComfyApiClient
+from src.comfyui_api.mock_client import MockComfyApiClient
 from .workflow_service import WorkflowService
-from src.config import GlobalConfig
 class ComfyUIPresenter(QObject):
     """
     🔄 重构后的ComfyUIPresenter - 严格遵循MVP模式
@@ -31,13 +33,16 @@ class ComfyUIPresenter(QObject):
         
         # 🆕 使用WorkflowService处理业务逻辑
         self.workflow_service = WorkflowService()
-        
-        # 🔄 连接View信号到Presenter
+        self.set_test_mode(True)
         self._connect_view_signals()
         
         # 🆕 连接Service信号到Presenter
         self._connect_service_signals()
-        
+    def set_test_mode(self, enabled: bool):
+        if enabled:
+            self.workflow_service.client = MockComfyApiClient()
+        else:
+            self.workflow_service.client = ComfyApiClient()
     def _connect_view_signals(self):
         """连接View信号到Presenter方法"""
         self.view.local_network_drive_selected.connect(self.handle_network_drive_selected)
