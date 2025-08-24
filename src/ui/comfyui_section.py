@@ -1,5 +1,6 @@
 from pathlib import Path
-from PyQt6.QtWidgets import QWidget, QVBoxLayout, QComboBox, QPushButton, QLabel, QProgressBar, QFileDialog, QMessageBox, QHBoxLayout,QLineEdit
+import random
+from PyQt6.QtWidgets import QWidget, QVBoxLayout, QComboBox, QSpinBox,QCheckBox, QPushButton, QLabel, QProgressBar, QFileDialog, QMessageBox, QHBoxLayout,QLineEdit
 from PyQt6.QtCore import Qt,QTimer,pyqtSignal,QSettings
 from PyQt6.QtGui import QIcon
 import os
@@ -77,7 +78,42 @@ class ComfyUISection(QWidget):
         prompt_layout.addWidget(self.prompt_select)
         prompt_layout.addStretch(0) 
         layout.addLayout(prompt_layout)
+        # ====== Seed 控件 ======
+        seed_layout = QHBoxLayout()
+        self.seed_label = QLabel("Seed:         ", self)
+        self.seed_input = QLineEdit(str(156680208700286), self)  # 默认值
+        self.seed_random_btn = QPushButton("随机", self)
+        self.seed_random_btn.clicked.connect(self.randomize_seed)
+        self.seed_random_each = QCheckBox("每次生成都随机", self)
+        self.seed_random_each.setChecked(True)
+        
+        self.seed_input.setFixedWidth(180)   # 输入框宽度
+        self.seed_input.setFixedHeight(28)
+        self.seed_random_btn.setFixedHeight(28)
+        self.seed_random_each.setFixedHeight(28) 
 
+        
+
+        seed_layout.addWidget(self.seed_label)
+        seed_layout.addWidget(self.seed_input)
+        seed_layout.addWidget(self.seed_random_btn)
+        seed_layout.addWidget(self.seed_random_each)
+        seed_layout.addStretch(1)
+        layout.addLayout(seed_layout)
+
+        # ====== Steps 控件 ======
+        steps_layout = QHBoxLayout()
+        self.steps_label = QLabel("Steps:        ", self)
+        self.steps_input = QSpinBox(self)
+        self.steps_input.setRange(1, 200)  # 合理范围
+        self.steps_input.setValue(20)      # 默认值
+        steps_layout.addWidget(self.steps_label)
+        steps_layout.addWidget(self.steps_input)
+        self.steps_input.setFixedWidth(80)   # 缩短输入框
+        self.steps_input.setFixedHeight(28)  # 高度统一
+        steps_layout.addStretch(1)
+        layout.addLayout(steps_layout)
+        
         # 提交按钮
         self.submit_button = QPushButton("提交任务", self)
         self.submit_button.setIcon(QIcon("path/to/submit_icon.ico"))  # Optional icon for the button
@@ -121,7 +157,9 @@ class ComfyUISection(QWidget):
         root_text = self.local_network_drive_input.text().strip()
         self.local_network_root = Path(root_text)
         self.comfy_assets_dir = self.local_network_root / GlobalConfig.code_project_root_rel_dir / GlobalConfig.comfy_assets_rel_dir
-        
+    def randomize_seed(self):
+        new_seed = random.randint(1, 2**63 - 1)  # 64bit 范围
+        self.seed_input.setText(str(new_seed))
     def select_folder(self):
         folder = QFileDialog.getExistingDirectory(self, "选择共享网盘根目录")
         if folder:
@@ -185,12 +223,17 @@ class ComfyUISection(QWidget):
         # Step 3: 收集信息传给 presenter/manager
         workflow_path = self.comfy_assets_dir/ "workflows" / selected_workflow
         prompt_path = self.comfy_assets_dir/ "prompts" / selected_prompt
-
+        seed_val = int(self.seed_input.text()) if self.seed_input.text().isdigit() else 156680208700286
+        steps_val = self.steps_input.value()
+        randomize_each_time = self.seed_random_each.isChecked()
+        print('randomize_each_time: ', randomize_each_time)
+        ui_config = {'seed':seed_val,'steps':steps_val,'randomize_each_time':randomize_each_time}
         # 这里不处理任务，只发送给上层
         self.submit_comfy_task.emit({
             "workflow_path": workflow_path,
             "prompt_path": prompt_path,
             "local_network_drive_dir": self.local_network_root,
+            "ui_config":ui_config
         })
         # comfyui_section.py
     def update_status(self, text: str):

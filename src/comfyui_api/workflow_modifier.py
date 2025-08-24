@@ -37,6 +37,7 @@ class WorkflowModifier:
             
             # UI配置修改
             self._apply_ui_config(ctype, inputs, ui_config)
+            print('ui_config: ', ui_config)
         
         return workflow
     

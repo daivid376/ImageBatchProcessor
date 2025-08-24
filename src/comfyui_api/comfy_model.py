@@ -4,6 +4,7 @@
 import json
 import copy
 import os
+import random
 import time
 from typing import Dict, List, Optional
 from dataclasses import dataclass, field
@@ -147,13 +148,16 @@ class ComfyModel(QObject):
             # 拷贝到临时目录
             temp_filename = self.file_handler.copy_to_temp(img_path, self.temp_input_dir)
             rel_input = f"{self.temp_input_rel_dir.name}/{temp_filename}"
-            
+            # 基础 UI 配置
+            ui_config = dict(task_info.get('ui_config', {}))
+            if ui_config.get("randomize_each_time", False):
+                ui_config["seed"] = random.randint(1, 2**63 - 1)
             # 修改工作流
             workflow = self.workflow_modifier.apply_modifications(
                 workflow_template, 
                 rel_input=rel_input,
                 prompt_text=prompt_text,
-                ui_config=task_info
+                ui_config=ui_config
             )
             
             # 创建任务
@@ -162,7 +166,7 @@ class ComfyModel(QObject):
                 payload={"prompt": workflow},
                 temp_filename=temp_filename,
                 prompt_filename= prompt_filename,
-                ui_config=task_info
+                ui_config=ui_config
             )
             
             self.add_task(task)
@@ -271,7 +275,6 @@ class ComfyModel(QObject):
             if max_value > 0:
                 self.progress_updated.emit(self.completed_count, self.task_count)
                 self.task_progress_updated.emit(name, value, max_value)
-            print('not complete self.completed_count: ', self.completed_count)
             # 检查是否完成
             if value >= max_value:
                 import threading
